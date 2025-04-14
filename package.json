@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "description": "webgame",
   "main": "dist/index.html",
-  "directories": {
-    "lib": "lib"
-  },
+  "type": "module",
   "scripts": {
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "lint": "biome lint"
+    "lint": "biome lint",
+    "build":"esbuild src/index.ts --bundle --outfile=dist/scripts/index.js",
+    "dev": "nodemon --watch src -e ts,js --exec \"npm run build && node server/index.js\"",
+    "start": "nodemon --watch src -e ts,js --exec \"npm run build && node server/index.js\""
   },
   "repository": {
     "type": "git",
@@ -24,7 +25,12 @@
   "homepage": "https://github.com/kylebrague/real-fake-ad-game#readme",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "esbuild": "^0.25.2",
+    "nodemon": "^3.1.9",
     "typescript": "^5.8.3",
     "vitest": "^3.1.1"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
   }
 }

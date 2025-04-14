@@ -1,11 +1,18 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs":{
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "master"
+  },
   "organizeImports": {
     "enabled": true
   },
   "files": {
     "ignore": [
-      "node_modules/**"
+      "node_modules/**",
+      "dist/scripts/**"
     ]
   },
   "linter": {

@@ -1,0 +1,6 @@
+{
+  "biome_lsp.trace.server": "verbose",
+  "biome.lspBin": "",
+  "editor.defaultFormatter": "biomejs.biome",
+  "biome.enabled": true
+}
