@@ -1,0 +1,30 @@
+{
+  "name": "real-fake-ad-game",
+  "version": "1.0.0",
+  "description": "webgame",
+  "main": "dist/index.html",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "lint": "biome lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kylebrague/real-fake-ad-game.git"
+  },
+  "author": "Kyle Brague",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/kylebrague/real-fake-ad-game/issues"
+  },
+  "homepage": "https://github.com/kylebrague/real-fake-ad-game#readme",
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
+  }
+}

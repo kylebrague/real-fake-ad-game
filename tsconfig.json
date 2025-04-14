@@ -4,9 +4,10 @@
     "target": "ESNext",
     "noImplicitAny": false,
     "sourceMap": true,
-    "outFile": "scripts/real-fake-ad.js"
+    "outFile": "dist/scripts/real-fake-ad-game.js"
   },
   "exclude": [
-    "node_modules"
-  ]
+    "node_modules",
+    "dist"
+  ],
 }
