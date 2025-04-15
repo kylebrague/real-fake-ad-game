@@ -56,7 +56,9 @@
       y: startY,
       width: 5,
       height: 10,
-      damage: 1
+      damage: 1,
+      lane: startX < canvasWidth / 2 ? "left" : "right"
+      // determine lane based on x position
     };
   }
   document.addEventListener("keydown", (e) => {

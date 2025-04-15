@@ -1,3 +1,5 @@
+import { Game } from "./lib/Game";
+
 // Get canvas and context
 const canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d");
@@ -70,6 +72,7 @@ function createBullet(startX: number, startY: number) {
     width: 5,
     height: 10,
     damage: 1,
+    lane: startX < canvasWidth / 2 ? "left" : "right", // determine lane based on x position
   };
 }
 
@@ -258,4 +261,13 @@ function loop(timestamp: number) {
   requestAnimationFrame(loop);
 }
 
-requestAnimationFrame(loop);
+document.addEventListener("DOMContentLoaded", () => {
+  // Create and start the game
+  const game = new Game("gameCanvas");
+  game.start();
+  
+  // Optional: Handle window events
+  window.addEventListener("beforeunload", () => {
+    game.stop();
+  });
+});

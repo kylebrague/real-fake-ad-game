@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "npm: build",
+      "detail": "esbuild src/index.ts --bundle --outfile=dist/scripts/index.js"
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "group": "build",
+      "problemMatcher": ["$esbuild"],
+      "label": "npm: watch",
+      "detail": "TypeScript rebuild on change",
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}
