@@ -7,13 +7,11 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch Server with Nodemon",
-      "runtimeExecutable": "nodemon",
-      "program": "${workspaceFolder}/server.js",
-      "restart": true,
+      "name": "Launch Server with Dev Mode",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
-      "preLaunchTask": "npm: watch",
       "skipFiles": [
         "<node_internals>/**"
       ]
@@ -34,12 +32,10 @@
       "name": "Full Stack: Node + Chrome",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "nodemon",
-      "program": "${workspaceFolder}/server.js",
-      "restart": true,
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
-      "preLaunchTask": "npm: build",
       "skipFiles": [
         "<node_internals>/**"
       ],

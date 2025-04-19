@@ -1,199 +1,181 @@
-# Entity Documentation
+# Understanding Entities in ECS
 
-## Overview
+## What is an Entity?
 
-`Entity` is a generalized base class for all game entities within the real-fake-ad-game. It provides common functionality and properties that game entities typically need, while allowing for customization and extension.
+In an Entity Component System (ECS) architecture, an **Entity** is simply a unique identifier that groups related components together. Unlike in Object-Oriented Programming where entities might contain both data and behavior, ECS entities are intentionally minimalist.
 
-## Key Features
+## Key Concepts
 
-- Flexible positioning and dimensioning
-- Support for health, speed, and damage properties
-- Custom properties system for extending entity data
-- Collision detection
-- Screen boundary checking
-- Rendering capabilities
+### 1. Entities are Just IDs
 
-## Type Definitions
-
-The class uses several TypeScript types for better organization:
-
-### EntityPosition
+In our implementation, an Entity is just a class with a unique ID:
 
 ```typescript
-export type EntityPosition = {
-  x: number;
-  y: number;
-};
-```
+export class Entity {
+  private static nextId = 0;
+  readonly id: number;
 
-### EntityDimension
-
-```typescript
-export type EntityDimension = {
-  width: number;
-  height: number;
-};
-```
-
-### EntityProperties
-
-```typescript
-export type EntityProperties = {
-  health?: number;
-  speed?: number;
-  damage?: number;
-  lane?: string;
-  [key: string]: unknown; // Allow for custom properties
-};
-```
-
-## Constructor
-
-The constructor is designed to be flexible, accepting multiple parameter formats:
-
-```typescript
-constructor(
-  positionOrX: EntityPosition | number,
-  dimensionOrY: EntityDimension | number, 
-  widthOrProps?: number | EntityDimension | EntityProperties,
-  heightOrProps?: number | EntityProperties,
-  props?: EntityProperties
-)
-```
-
-### Usage Examples
-
-#### Object-based Positioning
-
-```typescript
-// Using position and dimension objects
-const entity1 = new Entity(
-  { x: 10, y: 20 },           // position
-  { width: 30, height: 40 },  // dimension
-  { health: 100, speed: 5 }   // properties
-);
-```
-
-#### Individual Coordinates
-
-```typescript
-// Using individual coordinates
-const entity2 = new Entity(
-  10,   // x
-  20,   // y
-  30,   // width
-  40,   // height
-  { health: 100, speed: 5 }  // properties
-);
-```
-
-#### Mixed Format
-
-```typescript
-// Using position object with individual dimension values
-const entity3 = new Entity(
-  { x: 10, y: 20 },  // position
-  30,                // width
-  40,                // height
-  { health: 100 }    // properties
-);
-```
-
-## Core Properties
-
-- `x: number` - X coordinate of the entity
-- `y: number` - Y coordinate of the entity
-- `width: number` - Width of the entity
-- `height: number` - Height of the entity
-- `health?: number` - Optional health value
-- `speed?: number` - Optional movement speed
-- `damage?: number` - Optional damage value
-- `lane?: string` - Optional lane identifier (game-specific)
-- `hit: boolean` - Flag to track if entity has been hit
-- `properties: Record<string, unknown>` - Storage for custom properties
-
-## Custom Properties System
-
-The class includes a system to attach and retrieve custom properties:
-
-```typescript
-// Setting a custom property
-entity.setProperty('customKey', 'customValue');
-
-// Getting a custom property with a default value
-const value = entity.getProperty<string>('customKey', 'defaultValue');
-```
-
-## Methods
-
-### Position and Movement
-
-```typescript
-// Update position based on speed and delta time
-updatePosition(deltaTime: number): void
-
-// Move entity to specific coordinates
-moveTo(x: number, y: number): void
-```
-
-### Collision and Boundaries
-
-```typescript
-// Check collision with another entity
-checkCollision(other: Entity): boolean
-
-// Check if entity is off screen
-isOffScreen(canvasHeight: number, canvasWidth?: number): boolean
-```
-
-### Status Management
-
-```typescript
-// Check if entity is hit (health <= 0)
-isHit(): boolean
-
-// Apply damage to entity
-applyDamage(amount: number): void
-
-// Reset hit status
-resetHit(): void
-
-// Reset entity to default state
-reset(defaultHealth = 100): void
-```
-
-### Rendering
-
-```typescript
-// Render entity to canvas context
-render(ctx: CanvasRenderingContext2D, color = "red"): void
-```
-
-## Extension
-
-To create specialized game entities, extend this class:
-
-```typescript
-class Player extends Entity {
-  constructor(x: number, y: number) {
-    super(x, y, 30, 30, { health: 100, speed: 5 });
-  }
-  
-  // Add specialized player methods
-  shoot(): void {
-    // Implementation
+  constructor() {
+    this.id = Entity.nextId++;
   }
 }
 ```
 
-## Migration Guide
+This is intentionally simple. An entity's purpose is to serve as a "container" that components can be attached to, creating a game object with specific behaviors.
 
-When migrating from the previous, less generic version:
+### 2. Entities Have No Behavior
 
-1. Update constructor calls to match the new format
-2. Use type definitions for better type safety
-3. Take advantage of the custom properties system for entity-specific data
+Entities don't have methods that perform actions. All behavior is handled by Systems, which operate on components attached to entities.
 
-## Version History
+### 3. Entity Lifecycle
 
-- **April 2025**: Generalized implementation with flexible constructor and custom properties system
+Entities are:
+- **Created** when a new game object is needed
+- **Modified** by adding/removing components
+- **Destroyed** when no longer needed
+
+## How to Work with Entities
+
+### Creating an Entity
+
+```typescript
+// Through the world
+const player = world.createEntity();
+
+// Adding components to define what this entity represents
+world.addComponent(player, new PositionComponent(100, 200));
+world.addComponent(player, new PlayerComponent());
+world.addComponent(player, new HealthComponent(100));
+```
+
+### Finding Entities
+
+```typescript
+// Find all entities with specific components
+const movableEntities = world.getEntitiesWith('Position', 'Velocity');
+
+// Find a specific entity (e.g., the player)
+const players = world.getEntitiesWith('Player');
+const player = players[0]; // Assuming there's only one player
+```
+
+### Removing an Entity
+
+```typescript
+// Remove entity and all its components
+world.removeEntity(entity);
+```
+
+## Best Practices
+
+### 1. Create Entity Factories
+
+For entities you create frequently, make factory functions:
+
+```typescript
+function createEnemy(x: number, y: number, type: string): Entity {
+  const enemy = world.createEntity();
+  world.addComponent(enemy, new PositionComponent(x, y));
+  world.addComponent(enemy, new SizeComponent(30, 30));
+  world.addComponent(enemy, new VelocityComponent(0, 50));
+  world.addComponent(enemy, new RenderComponent('red'));
+  world.addComponent(enemy, new HealthComponent(1));
+  world.addComponent(enemy, new EnemyComponent(type, 10));
+  return enemy;
+}
+
+// Now easily create enemies
+const enemy1 = createEnemy(100, 0, 'basic');
+const enemy2 = createEnemy(200, 0, 'fast');
+```
+
+### 2. Use Tags for Unique Entities
+
+If you need to identify a special entity (like the player or a boss), add a tag:
+
+```typescript
+// Adding a tag component to identify the main player
+world.addComponent(player, new TagComponent('mainPlayer'));
+
+// Later, to find that specific entity
+function findMainPlayer(): Entity | undefined {
+  const taggedEntities = world.getEntitiesWith('Tag');
+  return taggedEntities.find(entity => {
+    const tag = world.getComponent<TagComponent>(entity, 'Tag');
+    return tag?.tag === 'mainPlayer';
+  });
+}
+```
+
+### 3. Avoid Entity Direct References
+
+Instead of storing direct references to entities, prefer to query for them when needed:
+
+```typescript
+// AVOID: Storing entity reference directly
+let playerEntity: Entity;
+
+// BETTER: Query when needed
+function getPlayerEntity(): Entity | undefined {
+  const players = world.getEntitiesWith('Player');
+  return players.length > 0 ? players[0] : undefined;
+}
+```
+
+This prevents issues if the original entity is destroyed.
+
+## Common Patterns
+
+### Entity Archetypes
+
+An archetype is a common set of components that define a type of game object:
+
+- **Player Archetype**: Position + Size + Render + Health + Player + Input
+- **Enemy Archetype**: Position + Size + Render + Health + Enemy + AI
+- **Bullet Archetype**: Position + Size + Render + Velocity + Bullet
+
+Thinking in archetypes helps organize your component combinations consistently.
+
+### Entity Relationships
+
+In ECS, relationships between entities are typically handled through components, not direct references:
+
+```typescript
+// Parent-child relationship using components
+world.addComponent(childEntity, new ParentComponent(parentEntity.id));
+
+// Finding all children of an entity
+function getChildEntities(parentId: number): Entity[] {
+  const allPotentialChildren = world.getEntitiesWith('Parent');
+  return allPotentialChildren.filter(entity => {
+    const parent = world.getComponent<ParentComponent>(entity, 'Parent');
+    return parent && parent.parentId === parentId;
+  });
+}
+```
+
+## Entity vs Traditional Game Objects
+
+| Traditional OOP | Entity in ECS |
+|----------------|---------------|
+| Contains data and behavior | Just an ID that groups components |
+| Uses inheritance hierarchy | Uses composition of components |
+| Methods define actions | No methods, systems handle behavior |
+| Direct relationships | Relationships through component data |
+
+## Performance Considerations
+
+- Entities themselves are very lightweight
+- The performance cost comes from component lookups and entity queries
+- Caching entity queries where appropriate can improve performance
+
+## Conclusion
+
+Entities in ECS are intentionally minimal - they provide identity, not functionality. This design allows for incredible flexibility through composition, letting you create complex game objects without rigid inheritance hierarchies.
+
+Remember:
+1. Entities are just IDs
+2. Components provide data
+3. Systems provide behavior
+
+By keeping these distinctions clear, you'll build a more maintainable and flexible game architecture.

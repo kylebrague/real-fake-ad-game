@@ -27,6 +27,9 @@
       },
       "style": {
         "useConst": "info"
+      },
+      "complexity":{
+        "noForEach": "info"
       }
     },
     "ignore": [

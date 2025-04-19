@@ -9,10 +9,13 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "lint": "biome lint",
-    "build": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/scripts/index.js ",
-    "watch": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/scripts/index.js --watch",
-    "dev": "nodemon --watch src -e ts,js  --exec \"npm run build && node server.js\"",
-    "start": "node server.js"
+    "build": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/scripts/index.js --sourcemap",
+    "build:prod": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/scripts/index.js --minify",
+    "watch": "esbuild src/index.ts --bundle --platform=browser --outfile=dist/scripts/index.js --watch --sourcemap",
+    "dev": "concurrently \"npm run watch\" \"nodemon --watch src -e ts,js,html,css --exec 'node server.js'\"",
+    "start": "node server.js",
+    "clean": "rm -rf dist/scripts/* && echo 'Cleaned dist/scripts directory'",
+    "prebuild": "npm run clean"
   },
   "repository": {
     "type": "git",
@@ -26,6 +29,7 @@
   "homepage": "https://github.com/kylebrague/real-fake-ad-game#readme",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "concurrently": "^8.2.2",
     "esbuild": "^0.25.2",
     "nodemon": "^3.1.9",
     "typescript": "^5.8.3",
