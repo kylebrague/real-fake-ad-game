@@ -17,6 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create game instance using the ECS architecture
   const game = new Game(canvas);
   
+  // Configure the perspective effect
+  game.configurePerspective({
+    enabled: true,          // Enable the perspective effect
+    vanishingPointY: 0,     // Vanishing point at the top of the screen
+    horizonY: canvas.height * -0.5, // Horizon line at 50% from the top
+    depthFactor: 0.9,       // How strong the perspective effect is (stronger than default)
+    minScale: 0.001         // Objects at horizon scale to 0.1% of original size
+  });
+  
   // Initialize and start the game
   game.init();
   game.start();

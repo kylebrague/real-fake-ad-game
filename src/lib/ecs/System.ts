@@ -10,7 +10,7 @@ export abstract class System {
   /**
    * Reference to the world this system belongs to
    */
-  protected world: World;
+  protected world!: World;
 
   /**
    * Array of component types that this system operates on

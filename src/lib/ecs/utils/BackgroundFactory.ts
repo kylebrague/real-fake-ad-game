@@ -1,4 +1,6 @@
-import { BackgroundComponent, type PathCommand } from "../components/CoreComponents";
+import { BackgroundComponent, PositionComponent, SizeComponent, type PathCommand } from "../components/CoreComponents";
+import type { Entity } from "../Entity";
+import type { World } from "../World";
 
 /**
  * BackgroundFactory utility for creating background components
@@ -116,4 +118,113 @@ export const BackgroundFactory = {
   ): BackgroundComponent {
     return new BackgroundComponent("custom", 0, 0, 0, 0, color, zIndex, pathCommands, fillRule);
   },
+
+  /**
+   * Helper method to add background with appropriate Position and Size components for perspective support
+   * @param world The ECS World instance
+   * @param background The background component to add
+   * @returns The created entity
+   */
+  addBackgroundToWorld(world: World, background: BackgroundComponent): Entity {
+    const entity = world.createEntity();
+    world.addComponent(entity, background);
+    
+    // Add Position and Size components for perspective support
+    if (background.shape === "rectangle") {
+      // For rectangles, we can directly use the values
+      world.addComponent(entity, new PositionComponent(background.x, background.y));
+      world.addComponent(entity, new SizeComponent(background.width, background.height));
+    } 
+    else if (background.pathCommands.length > 0) {
+      // For polygons and custom paths, calculate bounds
+      const bounds = this.calculateBoundsFromCommands(background.pathCommands);
+      world.addComponent(entity, new PositionComponent(bounds.minX, bounds.minY));
+      world.addComponent(entity, new SizeComponent(
+        bounds.maxX - bounds.minX,
+        bounds.maxY - bounds.minY
+      ));
+    }
+    
+    return entity;
+  },
+  
+  /**
+   * Calculate the bounding box of a set of path commands
+   */
+  calculateBoundsFromCommands(commands: PathCommand[]): {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } {
+    if (commands.length === 0) {
+      return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    }
+    
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    
+    for (const cmd of commands) {
+      switch (cmd.type) {
+        case 'moveTo':
+        case 'lineTo':
+          minX = Math.min(minX, cmd.x);
+          minY = Math.min(minY, cmd.y);
+          maxX = Math.max(maxX, cmd.x);
+          maxY = Math.max(maxY, cmd.y);
+          break;
+          
+        case 'arc':
+          minX = Math.min(minX, cmd.x - cmd.radius);
+          minY = Math.min(minY, cmd.y - cmd.radius);
+          maxX = Math.max(maxX, cmd.x + cmd.radius);
+          maxY = Math.max(maxY, cmd.y + cmd.radius);
+          break;
+          
+        case 'arcTo':
+          minX = Math.min(minX, cmd.x1, cmd.x2);
+          minY = Math.min(minY, cmd.y1, cmd.y2);
+          maxX = Math.max(maxX, cmd.x1, cmd.x2);
+          maxY = Math.max(maxY, cmd.y1, cmd.y2);
+          break;
+          
+        case 'bezierCurveTo':
+          minX = Math.min(minX, cmd.cp1x, cmd.cp2x, cmd.x);
+          minY = Math.min(minY, cmd.cp1y, cmd.cp2y, cmd.y);
+          maxX = Math.max(maxX, cmd.cp1x, cmd.cp2x, cmd.x);
+          maxY = Math.max(maxX, cmd.cp1y, cmd.cp2y, cmd.y);
+          break;
+          
+        case 'quadraticCurveTo':
+          minX = Math.min(minX, cmd.cpx, cmd.x);
+          minY = Math.min(minY, cmd.cpy, cmd.y);
+          maxX = Math.max(maxX, cmd.cpx, cmd.x);
+          maxY = Math.max(maxY, cmd.cpy, cmd.y);
+          break;
+          
+        case 'ellipse':
+          minX = Math.min(minX, cmd.x - cmd.radiusX);
+          minY = Math.min(minY, cmd.y - cmd.radiusY);
+          maxX = Math.max(maxX, cmd.x + cmd.radiusX);
+          maxY = Math.max(maxY, cmd.y + cmd.radiusY);
+          break;
+          
+        case 'rect':
+          minX = Math.min(minX, cmd.x);
+          minY = Math.min(minY, cmd.y);
+          maxX = Math.max(maxX, cmd.x + cmd.width);
+          maxY = Math.max(maxY, cmd.y + cmd.height);
+          break;
+      }
+    }
+    
+    return {
+      minX: Number.isFinite(minX) ? minX : 0,
+      minY: Number.isFinite(minY) ? minY : 0,
+      maxX: Number.isFinite(maxX) ? maxX : 0,
+      maxY: Number.isFinite(maxY) ? maxY : 0
+    };
+  }
 };

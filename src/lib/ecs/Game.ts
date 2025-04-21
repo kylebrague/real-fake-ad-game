@@ -136,62 +136,36 @@ export class Game {
     const dividerRectWidth = 20;
     const vanishingPoint: [number, number] = [this.config.canvasWidth / 2, -9999];
     const leftDividerCenterLineX =
-      mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2 ;
+      mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2;
     const rightDividerCenterLineX =
       mainLines.midline + (mainLines.rightSpawnLane - mainLines.midline) * 2;
 
-    // water at very base
-    const backgroundWater = this.world.createEntity();
-    this.world.addComponent(
-      backgroundWater,
-      BackgroundFactory.createRectangle(
-        0,
-        0,
-        mainLines.rightBorder,
-        this.config.canvasHeight,
-        "#42c8f5",
-        -1
-      )
-    );
-
     // road lane
-    const leftLane = this.world.createEntity();
-    this.world.addComponent(
-      leftLane,
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
       BackgroundFactory.createPolygon(
         [
-          vanishingPoint,
+          [leftDividerCenterLineX, 0],
+          
           [leftDividerCenterLineX, this.config.canvasHeight],
           [rightDividerCenterLineX, this.config.canvasHeight],
+          [rightDividerCenterLineX, 0],
+
         ],
         "#8b9699",
         0
       )
     );
-
-    // // Right lane - using rectangle
-    // const rightLane = this.world.createEntity();
-    // this.world.addComponent(
-    //   rightLane,
-    //   BackgroundFactory.createRectangle(
-    //     this.config.canvasWidth / 2,
-    //     0,
-    //     (mainLines.rightBorder / 8) * 3,
-    //     this.config.canvasHeight,
-    //     "#8b9699",
-    //     0
-    //   )
-    // );
+    
     // Left divider - using polygon for an angled shape
-    const leftBarrier = this.world.createEntity();
-    this.world.addComponent(
-      leftBarrier,
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
       BackgroundFactory.createPolygon(
         [
-          [(mainLines.rightBorder / 8) * 1 - dividerRectWidth / 2, 0],
-          [(mainLines.rightBorder / 8) * 1 - dividerRectWidth / 2 - 10, this.config.canvasHeight],
-          [(mainLines.rightBorder / 8) * 1 + dividerRectWidth / 2 - 10, this.config.canvasHeight],
-          [(mainLines.rightBorder / 8) * 1 + dividerRectWidth / 2, 0],
+          [leftDividerCenterLineX - dividerRectWidth / 2, 0],
+          [leftDividerCenterLineX - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [leftDividerCenterLineX + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [leftDividerCenterLineX + dividerRectWidth / 2, 0],
         ],
         "#c5d5d9",
         1
@@ -199,12 +173,11 @@ export class Game {
     );
 
     // Middle divider - using a custom path with curves
-    const middleDivider = this.world.createEntity();
     const midX = this.config.canvasWidth / 2;
     const midY = this.config.canvasHeight - 250;
 
-    this.world.addComponent(
-      middleDivider,
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
       BackgroundFactory.createCustomPath(
         [
           { type: "moveTo", x: midX - dividerRectWidth / 2, y: 0 },
@@ -247,31 +220,16 @@ export class Game {
     //   )
     // );
 
-    const rightBarrierPrism0 = this.world.createEntity();
-    this.world.addComponent(
-      rightBarrierPrism0,
-      BackgroundFactory.createPolygon(
-        // top
-        [
-          vanishingPoint,
-          [rightDividerCenterLineX - 10, this.config.canvasHeight],
-          [rightDividerCenterLineX + 10, this.config.canvasHeight],
-        ],
-        "#FFF4C1FF",
-        1
-      )
-    );
-    // Right divider
-    const rightBarrierPrism1 = this.world.createEntity();
-    this.world.addComponent(
-      rightBarrierPrism1,
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
       BackgroundFactory.createPolygon(
         [
-          vanishingPoint, // center point
-          [rightDividerCenterLineX - 10, this.config.canvasHeight],
-          [rightDividerCenterLineX - 20, this.config.canvasHeight],
+          [rightDividerCenterLineX - dividerRectWidth / 2, 0],
+          [rightDividerCenterLineX - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [rightDividerCenterLineX + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [rightDividerCenterLineX + dividerRectWidth / 2, 0],
         ],
-        "#94CB99FF",
+        "#c5d5d9",
         1
       )
     );
@@ -588,5 +546,25 @@ export class Game {
     if (imagePaths.length > 0) {
       await this.renderSystem.preloadImages(imagePaths);
     }
+  }
+
+  /**
+   * Configure perspective settings for the 3D depth effect
+   * 
+   * @param options Configuration options for the perspective effect
+   * @param options.enabled Whether the perspective effect is enabled (default: true)
+   * @param options.vanishingPointY Y position of the vanishing point (default: 0 - top of screen)
+   * @param options.depthFactor How strong the perspective effect is (0-1) (default: 0.3)
+   * @param options.horizonY Y position of the horizon line (default: canvas height * 0.5)
+   * @param options.minScale Minimum scale for distant objects (default: 0.5)
+   */
+  configurePerspective(options: {
+    enabled?: boolean;
+    vanishingPointY?: number;
+    depthFactor?: number;
+    horizonY?: number;
+    minScale?: number;
+  }): void {
+    this.renderSystem.configurePerspective(options);
   }
 }
