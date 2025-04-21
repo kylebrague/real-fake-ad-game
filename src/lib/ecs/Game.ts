@@ -6,6 +6,7 @@ import { PlayerSystem } from "./systems/PlayerSystem";
 import { SpawnSystem } from "./systems/SpawnSystem";
 import { CleanupSystem } from "./systems/CleanupSystem";
 import { PowerupSystem } from "./systems/PowerupSystem";
+import { BackgroundFactory } from "./utils/BackgroundFactory";
 
 import {
   PositionComponent,
@@ -13,6 +14,9 @@ import {
   RenderComponent,
   HealthComponent,
   CollisionComponent,
+  SpriteComponent,
+  type BackgroundComponent,
+  type PathCommand,
 } from "./components/CoreComponents";
 import { PlayerComponent, TagComponent, GameStateComponent } from "./components/GameComponents";
 
@@ -39,9 +43,9 @@ export class Game {
   // ========================= Configuration =========================
   private config: ConstructorParameters<typeof SpawnSystem>[0] = {
     canvasWidth: 800,
-    canvasHeight: 600,
-    leftSideX: 200,
-    rightSideX: 600,
+    canvasHeight: 900,
+    leftSideX: 250,
+    rightSideX: 550,
     leftSideSpawnInterval: 2,
     rightSideSpawnInterval: 3,
   };
@@ -79,6 +83,9 @@ export class Game {
 
     this.world.addSystem(new SpawnSystem(this.config));
     this.world.addSystem(new CleanupSystem());
+
+    // Create background entities
+    this.createBackgroundElements();
   }
 
   /**
@@ -86,7 +93,6 @@ export class Game {
    */
   init(): void {
     if (this.gameInitialized) return;
-
     // Create game state entity
     const gameStateEntity = this.world.createEntity();
     this.world.addComponent(gameStateEntity, new GameStateComponent());
@@ -101,15 +107,174 @@ export class Game {
       new PositionComponent(this.config.canvasWidth / 2 - 25, this.config.canvasHeight - 60)
     );
     this.world.addComponent(player, new SizeComponent(50, 50));
-    this.world.addComponent(player, new RenderComponent("green"));
     this.world.addComponent(player, new PlayerComponent());
     this.world.addComponent(player, new HealthComponent(100));
     this.world.addComponent(player, new CollisionComponent(true, 0, "player"));
+    this.world.addComponent(
+      player,
+      new SpriteComponent("assets/army-man-sprite.png", 32, 32, 9, 16, 0, false, 1, false, 4)
+    );
 
     // Set up input handlers
     this.setupInputHandlers();
-
     this.gameInitialized = true;
+  }
+
+  /**
+   * Create background elements using the ECS system
+   */
+  private createBackgroundElements(): void {
+    // Keep track of the main vertical lines we draw off of
+    const mainLines = {
+      leftBorder: 0, // (w / 8) * 0
+      leftSpawnLane: this.config.leftSideX, // (w / 8) * 2
+      midline: this.config.canvasWidth / 2, // (w / 8) * 4
+      rightSpawnLane: this.config.rightSideX, // (w / 8) * 6
+      rightBorder: this.config.canvasWidth, // (w / 8) * 8
+    };
+
+    const dividerRectWidth = 20;
+    const vanishingPoint: [number, number] = [this.config.canvasWidth / 2, -9999];
+    const leftDividerCenterLineX =
+      mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2 ;
+    const rightDividerCenterLineX =
+      mainLines.midline + (mainLines.rightSpawnLane - mainLines.midline) * 2;
+
+    // water at very base
+    const backgroundWater = this.world.createEntity();
+    this.world.addComponent(
+      backgroundWater,
+      BackgroundFactory.createRectangle(
+        0,
+        0,
+        mainLines.rightBorder,
+        this.config.canvasHeight,
+        "#42c8f5",
+        -1
+      )
+    );
+
+    // road lane
+    const leftLane = this.world.createEntity();
+    this.world.addComponent(
+      leftLane,
+      BackgroundFactory.createPolygon(
+        [
+          vanishingPoint,
+          [leftDividerCenterLineX, this.config.canvasHeight],
+          [rightDividerCenterLineX, this.config.canvasHeight],
+        ],
+        "#8b9699",
+        0
+      )
+    );
+
+    // // Right lane - using rectangle
+    // const rightLane = this.world.createEntity();
+    // this.world.addComponent(
+    //   rightLane,
+    //   BackgroundFactory.createRectangle(
+    //     this.config.canvasWidth / 2,
+    //     0,
+    //     (mainLines.rightBorder / 8) * 3,
+    //     this.config.canvasHeight,
+    //     "#8b9699",
+    //     0
+    //   )
+    // );
+    // Left divider - using polygon for an angled shape
+    const leftBarrier = this.world.createEntity();
+    this.world.addComponent(
+      leftBarrier,
+      BackgroundFactory.createPolygon(
+        [
+          [(mainLines.rightBorder / 8) * 1 - dividerRectWidth / 2, 0],
+          [(mainLines.rightBorder / 8) * 1 - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [(mainLines.rightBorder / 8) * 1 + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [(mainLines.rightBorder / 8) * 1 + dividerRectWidth / 2, 0],
+        ],
+        "#c5d5d9",
+        1
+      )
+    );
+
+    // Middle divider - using a custom path with curves
+    const middleDivider = this.world.createEntity();
+    const midX = this.config.canvasWidth / 2;
+    const midY = this.config.canvasHeight - 250;
+
+    this.world.addComponent(
+      middleDivider,
+      BackgroundFactory.createCustomPath(
+        [
+          { type: "moveTo", x: midX - dividerRectWidth / 2, y: 0 },
+          { type: "lineTo", x: midX - dividerRectWidth / 2, y: midY - 50 },
+          {
+            type: "quadraticCurveTo",
+            cpx: midX - dividerRectWidth / 2,
+            cpy: midY,
+            x: midX,
+            y: midY,
+          },
+          {
+            type: "quadraticCurveTo",
+            cpx: midX + dividerRectWidth / 2,
+            cpy: midY,
+            x: midX + dividerRectWidth / 2,
+            y: midY - 50,
+          },
+          { type: "lineTo", x: midX + dividerRectWidth / 2, y: 0 },
+          { type: "closePath" },
+        ],
+        "#c5d5d9",
+        1
+      )
+    );
+
+    // // Right divider - using a wavy curved path
+    // const rightBarrier = this.world.createEntity();
+    // this.world.addComponent(
+    //   rightBarrier,
+    //   BackgroundFactory.createPolygon(
+    //     [
+    //       [(mainLines.rightBorder / 8) * 7 - dividerRectWidth / 2, 0],
+    //       [(mainLines.rightBorder / 8) * 7 - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+    //       [(mainLines.rightBorder / 8) * 7 + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+    //       [(mainLines.rightBorder / 8) * 7 + dividerRectWidth / 2, 0],
+    //     ],
+    //     "#c5d5d9",
+    //     1
+    //   )
+    // );
+
+    const rightBarrierPrism0 = this.world.createEntity();
+    this.world.addComponent(
+      rightBarrierPrism0,
+      BackgroundFactory.createPolygon(
+        // top
+        [
+          vanishingPoint,
+          [rightDividerCenterLineX - 10, this.config.canvasHeight],
+          [rightDividerCenterLineX + 10, this.config.canvasHeight],
+        ],
+        "#FFF4C1FF",
+        1
+      )
+    );
+    // Right divider
+    const rightBarrierPrism1 = this.world.createEntity();
+    this.world.addComponent(
+      rightBarrierPrism1,
+      BackgroundFactory.createPolygon(
+        [
+          vanishingPoint, // center point
+          [rightDividerCenterLineX - 10, this.config.canvasHeight],
+          [rightDividerCenterLineX - 20, this.config.canvasHeight],
+        ],
+        "#94CB99FF",
+        1
+      )
+    );
   }
 
   /**
@@ -158,16 +323,16 @@ export class Game {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    
+
     // Render one last frame to show the pause screen
     const ctx = this.canvas.getContext("2d");
     if (ctx) {
       // Clear the canvas
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      
+
       // Continue to render the world (game objects will still be visible)
       this.world.update(0); // Update with 0 delta to avoid movement
-      
+
       // Draw the pause text
       ctx.fillStyle = "black";
       ctx.font = "48px Arial";
@@ -236,7 +401,7 @@ export class Game {
         gameStateEntities[0],
         "GameState"
       );
-      if(gameState?.isPaused){
+      if (gameState?.isPaused) {
         // Handle paused state (render pause screen)
         if (ctx) {
           ctx.fillStyle = "black";
@@ -277,10 +442,7 @@ export class Game {
       if (event.key === "p") {
         const gsEntities = this.world.getEntitiesWith("GameState");
         if (gsEntities.length > 0) {
-          const gameState = this.world.getComponent<GameStateComponent>(
-            gsEntities[0],
-            "GameState"
-          );
+          const gameState = this.world.getComponent<GameStateComponent>(gsEntities[0], "GameState");
 
           if (gameState) {
             if (gameState.isPaused) {
@@ -406,7 +568,7 @@ export class Game {
 
     this.playerSystem = new PlayerSystem(this.config.canvasWidth, this.config.canvasHeight);
     this.world.addSystem(this.playerSystem);
-    
+
     this.powerupSystem = new PowerupSystem();
     this.world.addSystem(this.powerupSystem);
 
@@ -416,5 +578,15 @@ export class Game {
     // Re-initialize the game
     this.gameInitialized = false;
     this.init();
+  }
+
+  /**
+   * Preload game assets
+   * This method can be called before starting the game to ensure all images are ready
+   */
+  async preloadAssets(imagePaths: string[]): Promise<void> {
+    if (imagePaths.length > 0) {
+      await this.renderSystem.preloadImages(imagePaths);
+    }
   }
 }

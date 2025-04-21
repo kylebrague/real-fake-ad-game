@@ -175,33 +175,211 @@
   // src/lib/ecs/systems/RenderSystem.ts
   var RenderSystem = class extends System {
     ctx;
+    imageCache;
     constructor(ctx) {
-      super(["Position", "Size", "Render"]);
+      super(["Position", "Size"]);
       this.ctx = ctx;
+      this.imageCache = /* @__PURE__ */ new Map();
     }
     update(deltaTime) {
-      const entities = this.world.getEntitiesWith("Position", "Size", "Render");
-      for (const entity of entities) {
-        const position = this.world.getComponent(entity, "Position");
-        const size = this.world.getComponent(entity, "Size");
-        const render = this.world.getComponent(entity, "Render");
-        if (position && size && render) {
-          this.ctx.fillStyle = render.color;
-          if (render.shape === "rectangle") {
-            this.ctx.fillRect(position.x, position.y, size.width, size.height);
-          } else if (render.shape === "circle") {
-            this.ctx.beginPath();
-            this.ctx.arc(
-              position.x + size.width / 2,
-              position.y + size.height / 2,
-              Math.min(size.width, size.height) / 2,
-              0,
-              Math.PI * 2
-            );
-            this.ctx.fill();
+      const backgroundEntities = this.world.getEntitiesWith("Background");
+      backgroundEntities.sort((a, b) => {
+        const bgA = this.world.getComponent(a, "Background");
+        const bgB = this.world.getComponent(b, "Background");
+        return (bgA?.zIndex || 0) - (bgB?.zIndex || 0);
+      });
+      for (const entity of backgroundEntities) {
+        this.renderBackground(entity);
+      }
+      const basicShapeEntities = this.world.getEntitiesWith("Position", "Size", "Render");
+      const spriteEntities = this.world.getEntitiesWith("Position", "Size", "Sprite");
+      for (const entity of basicShapeEntities) {
+        this.renderBasicShape(entity);
+      }
+      for (const entity of spriteEntities) {
+        this.renderSprite(entity, deltaTime);
+      }
+    }
+    /**
+     * Renders a background element
+     */
+    renderBackground(entity) {
+      const background = this.world.getComponent(entity, "Background");
+      if (!background) return;
+      this.ctx.fillStyle = background.color;
+      const path = new Path2D();
+      switch (background.shape) {
+        case "rectangle":
+          path.rect(background.x, background.y, background.width, background.height);
+          break;
+        case "polygon":
+        case "custom":
+          if (background.pathCommands && background.pathCommands.length > 0) {
+            this.executePathCommands(path, background.pathCommands);
           }
+          break;
+      }
+      this.ctx.fill(path, background.fillRule);
+    }
+    /**
+     * Execute a series of path commands on a Path2D object
+     */
+    executePathCommands(path, commands) {
+      for (const cmd of commands) {
+        switch (cmd.type) {
+          case "moveTo":
+            path.moveTo(cmd.x, cmd.y);
+            break;
+          case "lineTo":
+            path.lineTo(cmd.x, cmd.y);
+            break;
+          case "arc":
+            path.arc(
+              cmd.x,
+              cmd.y,
+              cmd.radius,
+              cmd.startAngle,
+              cmd.endAngle,
+              cmd.counterclockwise
+            );
+            break;
+          case "arcTo":
+            path.arcTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.radius);
+            break;
+          case "bezierCurveTo":
+            path.bezierCurveTo(
+              cmd.cp1x,
+              cmd.cp1y,
+              cmd.cp2x,
+              cmd.cp2y,
+              cmd.x,
+              cmd.y
+            );
+            break;
+          case "quadraticCurveTo":
+            path.quadraticCurveTo(cmd.cpx, cmd.cpy, cmd.x, cmd.y);
+            break;
+          case "ellipse":
+            path.ellipse(
+              cmd.x,
+              cmd.y,
+              cmd.radiusX,
+              cmd.radiusY,
+              cmd.rotation,
+              cmd.startAngle,
+              cmd.endAngle,
+              cmd.counterclockwise
+            );
+            break;
+          case "rect":
+            path.rect(cmd.x, cmd.y, cmd.width, cmd.height);
+            break;
+          case "closePath":
+            path.closePath();
+            break;
         }
       }
+    }
+    /**
+     * Renders an entity with Position, Size, and Render components
+     */
+    renderBasicShape(entity) {
+      const position = this.world.getComponent(entity, "Position");
+      const size = this.world.getComponent(entity, "Size");
+      const render = this.world.getComponent(entity, "Render");
+      if (!position || !size || !render) return;
+      this.ctx.fillStyle = render.color;
+      this.ctx.fillRect(position.x, position.y, size.width, size.height);
+    }
+    /**
+     * Renders an entity with Position, Size, and Sprite components
+     */
+    renderSprite(entity, deltaTime) {
+      const position = this.world.getComponent(entity, "Position");
+      const size = this.world.getComponent(entity, "Size");
+      const sprite = this.world.getComponent(entity, "Sprite");
+      if (!position || !size || !sprite) return;
+      if (!sprite.imageElement || !sprite.imageElement.complete || sprite.imageElement.naturalWidth === 0) {
+        return;
+      }
+      if (sprite.animationSpeed > 0 && sprite.totalFrames > 1) {
+        const frameAdvance = sprite.animationSpeed * deltaTime;
+        if (sprite.loop) {
+          sprite.currentFrame = (sprite.currentFrame + frameAdvance) % sprite.totalFrames;
+        } else {
+          sprite.currentFrame = Math.min(sprite.currentFrame + frameAdvance, sprite.totalFrames - 1e-3);
+        }
+      }
+      this.ctx.save();
+      if (sprite.opacity !== 1) {
+        this.ctx.globalAlpha = Math.max(0, Math.min(1, sprite.opacity));
+      }
+      if (position.rotation !== 0) {
+        const centerX = position.x + size.width / 2;
+        const centerY = position.y + size.height / 2;
+        this.ctx.translate(centerX, centerY);
+        this.ctx.rotate(position.rotation);
+        this.ctx.translate(-centerX, -centerY);
+      }
+      const frameWidth = sprite.frameWidth || sprite.imageElement.width;
+      const frameHeight = sprite.frameHeight || sprite.imageElement.height;
+      const currentFrame = Math.floor(sprite.currentFrame);
+      const columns = sprite.columns || sprite.totalFrames;
+      const sourceX = currentFrame % columns * frameWidth;
+      const sourceY = Math.floor(currentFrame / columns) * frameHeight;
+      if (sprite.flipped) {
+        this.ctx.translate(position.x + size.width, position.y);
+        this.ctx.scale(-1, 1);
+        this.ctx.drawImage(
+          sprite.imageElement,
+          sourceX,
+          sourceY,
+          frameWidth,
+          frameHeight,
+          0,
+          0,
+          size.width,
+          size.height
+        );
+      } else {
+        this.ctx.drawImage(
+          sprite.imageElement,
+          sourceX,
+          sourceY,
+          frameWidth,
+          frameHeight,
+          position.x,
+          position.y,
+          size.width,
+          size.height
+        );
+      }
+      this.ctx.restore();
+    }
+    /**
+     * Preloads an image and caches it for future use
+     * Useful for loading assets at startup to avoid delays during gameplay
+     */
+    preloadImage(imageSrc) {
+      return new Promise((resolve, reject) => {
+        if (this.imageCache.has(imageSrc)) {
+          resolve(this.imageCache.get(imageSrc));
+          return;
+        }
+        const image = new Image();
+        image.onload = () => {
+          this.imageCache.set(imageSrc, image);
+          resolve(image);
+        };
+        image.onerror = () => reject(new Error(`Failed to load image: ${imageSrc}`));
+        image.src = imageSrc;
+      });
+    }
+    /**
+     * Bulk preload multiple images
+     */
+    preloadImages(imageSrcs) {
+      return Promise.all(imageSrcs.map((src) => this.preloadImage(src)));
     }
   };
 
@@ -247,7 +425,7 @@
           if (this.isColliding(bulletPos, bulletSize, enemyPos, enemySize)) {
             enemyHealth.currentHealth -= bulletComponent.damage;
             bulletComponent.hit = true;
-            if (enemyHealth.isDead()) {
+            if (enemyHealth.currentHealth <= 0) {
               const enemy = this.world.getComponent(enemyEntity, "Enemy");
               const players = this.world.getEntitiesWith("Player");
               if (enemy && players.length > 0) {
@@ -268,7 +446,7 @@
             if (!powerupPos || !powerupSize || !powerupHealth) continue;
             if (this.isColliding(bulletPos, bulletSize, powerupPos, powerupSize)) {
               powerupHealth.currentHealth -= bulletComponent.damage;
-              if (powerupHealth.isDead()) {
+              if (powerupHealth.currentHealth <= 0) {
                 const powerupSystems = this.world.getSystems("PowerupSystem");
                 if (powerupSystems.length > 0) {
                   const powerupSystem = powerupSystems[0];
@@ -410,15 +588,48 @@
     }
     type = "Render";
   };
+  var SpriteComponent = class {
+    // Store the initial frame for animations that need to reset
+    constructor(imageSrc, frameWidth = 0, frameHeight = 0, currentFrame = 0, totalFrames = 1, animationSpeed = 0, flipped = false, opacity = 1, loop = true, columns = 0) {
+      this.imageSrc = imageSrc;
+      this.frameWidth = frameWidth;
+      this.frameHeight = frameHeight;
+      this.currentFrame = currentFrame;
+      this.totalFrames = totalFrames;
+      this.animationSpeed = animationSpeed;
+      this.flipped = flipped;
+      this.opacity = opacity;
+      this.loop = loop;
+      this.columns = columns;
+      if (imageSrc) {
+        this.imageElement = new Image();
+        this.imageElement.src = imageSrc;
+      }
+      this.initialFrame = currentFrame;
+      if (currentFrame >= totalFrames) {
+        this.currentFrame = totalFrames - 1;
+      }
+      if (this.columns === 0) {
+        this.columns = totalFrames;
+      }
+    }
+    type = "Sprite";
+    // Image source - can be a path or a loaded HTMLImageElement
+    imageElement = null;
+    initialFrame;
+    /**
+     * Reset the animation to its initial frame
+     */
+    resetAnimation() {
+      this.currentFrame = this.initialFrame;
+    }
+  };
   var HealthComponent = class {
     constructor(currentHealth, maxHealth = currentHealth) {
       this.currentHealth = currentHealth;
       this.maxHealth = maxHealth;
     }
     type = "Health";
-    isDead() {
-      return this.currentHealth <= 0;
-    }
   };
   var CollisionComponent = class {
     constructor(collidable = true, damage = 0, collisionGroup = "default") {
@@ -427,6 +638,33 @@
       this.collisionGroup = collisionGroup;
     }
     type = "Collision";
+  };
+  var BackgroundComponent = class {
+    /**
+     * Create a new background component
+     * 
+     * @param shape - The shape type ('rectangle', 'polygon', or 'custom')
+     * @param x - X coordinate of background element (or starting point for paths)
+     * @param y - Y coordinate of background element (or starting point for paths)
+     * @param width - Width of background element (used for rectangle)
+     * @param height - Height of background element (used for rectangle)
+     * @param color - Color of background element (CSS color string)
+     * @param zIndex - Z-index for layering (lower values are drawn first)
+     * @param pathCommands - Array of path commands for polygon or custom paths
+     * @param fillRule - The fill rule to use ('nonzero' or 'evenodd')
+     */
+    constructor(shape = "rectangle", x = 0, y = 0, width = 0, height = 0, color = "blue", zIndex = 0, pathCommands = [], fillRule = "nonzero") {
+      this.shape = shape;
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+      this.color = color;
+      this.zIndex = zIndex;
+      this.pathCommands = pathCommands;
+      this.fillRule = fillRule;
+    }
+    type = "Background";
   };
 
   // src/lib/ecs/components/GameComponents.ts
@@ -724,8 +962,16 @@
      * This is typically called when a player picks up a rapid fire powerup
      */
     applyRapidFirePowerup(entity, duration, multiplier = 0.5) {
-      if (this.world.getComponent(entity, "CooldownModifier")) {
-        this.world.removeComponent(entity, "CooldownModifier");
+      const existingModifier = this.world.getComponent(
+        entity,
+        "CooldownModifier"
+      );
+      if (existingModifier) {
+        if (multiplier < existingModifier.bulletCooldownMultiplier) {
+          this.world.removeComponent(entity, "CooldownModifier");
+        } else {
+          return;
+        }
       }
       this.world.addComponent(entity, new CooldownModifierComponent(multiplier, duration, duration));
     }
@@ -737,11 +983,11 @@
       const powerup = this.world.getComponent(powerupEntity, "Powerup");
       if (!powerup) return;
       switch (powerup.powerupType) {
-        case "rapidFire":
-          this.applyRapidFirePowerup(playerEntity, 5, 0.5);
-          break;
         case "superRapidFire":
-          this.applyRapidFirePowerup(playerEntity, 3, 0.25);
+          this.applyRapidFirePowerup(playerEntity, 15, 0.25);
+          break;
+        case "rapidFire":
+          this.applyRapidFirePowerup(playerEntity, 15, 0.5);
           break;
         case "normalizedFire":
           if (this.world.getComponent(playerEntity, "CooldownModifier")) {
@@ -749,8 +995,48 @@
           }
           break;
         default:
+          console.warn(`Unhandled powerup type: ${powerup.powerupType}`);
           break;
       }
+    }
+  };
+
+  // src/lib/ecs/utils/BackgroundFactory.ts
+  var BackgroundFactory = {
+    /**
+     * Create a rectangle background component
+     */
+    createRectangle(x, y, width, height, color = "blue", zIndex = 0) {
+      return new BackgroundComponent("rectangle", x, y, width, height, color, zIndex);
+    },
+    /**
+     * Create a polygon background component from a set of points
+     */
+    createPolygon(points, color = "blue", zIndex = 0) {
+      const pathCommands = [];
+      if (points.length > 0) {
+        pathCommands.push({ type: "moveTo", x: points[0][0], y: points[0][1] });
+        for (let i = 1; i < points.length; i++) {
+          pathCommands.push({ type: "lineTo", x: points[i][0], y: points[i][1] });
+        }
+        pathCommands.push({ type: "closePath" });
+      }
+      return new BackgroundComponent(
+        "polygon",
+        points[0]?.[0] || 0,
+        points[0]?.[1] || 0,
+        0,
+        0,
+        color,
+        zIndex,
+        pathCommands
+      );
+    },
+    /**
+     * Create a custom path background component from a series of path commands
+     */
+    createCustomPath(pathCommands, color = "blue", zIndex = 0, fillRule = "nonzero") {
+      return new BackgroundComponent("custom", 0, 0, 0, 0, color, zIndex, pathCommands, fillRule);
     }
   };
 
@@ -779,6 +1065,7 @@
       this.world.addSystem(this.powerupSystem);
       this.world.addSystem(new SpawnSystem(this.config));
       this.world.addSystem(new CleanupSystem());
+      this.createBackgroundElements();
     }
     // Core ECS world
     world;
@@ -793,9 +1080,9 @@
     // ========================= Configuration =========================
     config = {
       canvasWidth: 800,
-      canvasHeight: 600,
-      leftSideX: 200,
-      rightSideX: 600,
+      canvasHeight: 900,
+      leftSideX: 250,
+      rightSideX: 550,
       leftSideSpawnInterval: 2,
       rightSideSpawnInterval: 3
     };
@@ -813,12 +1100,133 @@
         new PositionComponent(this.config.canvasWidth / 2 - 25, this.config.canvasHeight - 60)
       );
       this.world.addComponent(player, new SizeComponent(50, 50));
-      this.world.addComponent(player, new RenderComponent("green"));
       this.world.addComponent(player, new PlayerComponent());
       this.world.addComponent(player, new HealthComponent(100));
       this.world.addComponent(player, new CollisionComponent(true, 0, "player"));
+      this.world.addComponent(
+        player,
+        new SpriteComponent("assets/army-man-sprite.png", 32, 32, 9, 16, 0, false, 1, false, 4)
+      );
       this.setupInputHandlers();
       this.gameInitialized = true;
+    }
+    /**
+     * Create background elements using the ECS system
+     */
+    createBackgroundElements() {
+      const mainLines = {
+        leftBorder: 0,
+        // (w / 8) * 0
+        leftSpawnLane: this.config.leftSideX,
+        // (w / 8) * 2
+        midline: this.config.canvasWidth / 2,
+        // (w / 8) * 4
+        rightSpawnLane: this.config.rightSideX,
+        // (w / 8) * 6
+        rightBorder: this.config.canvasWidth
+        // (w / 8) * 8
+      };
+      const dividerRectWidth = 20;
+      const vanishingPoint = [this.config.canvasWidth / 2, -9999];
+      const leftDividerCenterLineX = mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2;
+      const rightDividerCenterLineX = mainLines.midline + (mainLines.rightSpawnLane - mainLines.midline) * 2;
+      const backgroundWater = this.world.createEntity();
+      this.world.addComponent(
+        backgroundWater,
+        BackgroundFactory.createRectangle(
+          0,
+          0,
+          mainLines.rightBorder,
+          this.config.canvasHeight,
+          "#42c8f5",
+          -1
+        )
+      );
+      const leftLane = this.world.createEntity();
+      this.world.addComponent(
+        leftLane,
+        BackgroundFactory.createPolygon(
+          [
+            vanishingPoint,
+            [leftDividerCenterLineX, this.config.canvasHeight],
+            [rightDividerCenterLineX, this.config.canvasHeight]
+          ],
+          "#8b9699",
+          0
+        )
+      );
+      const leftBarrier = this.world.createEntity();
+      this.world.addComponent(
+        leftBarrier,
+        BackgroundFactory.createPolygon(
+          [
+            [mainLines.rightBorder / 8 * 1 - dividerRectWidth / 2, 0],
+            [mainLines.rightBorder / 8 * 1 - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+            [mainLines.rightBorder / 8 * 1 + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+            [mainLines.rightBorder / 8 * 1 + dividerRectWidth / 2, 0]
+          ],
+          "#c5d5d9",
+          1
+        )
+      );
+      const middleDivider = this.world.createEntity();
+      const midX = this.config.canvasWidth / 2;
+      const midY = this.config.canvasHeight - 250;
+      this.world.addComponent(
+        middleDivider,
+        BackgroundFactory.createCustomPath(
+          [
+            { type: "moveTo", x: midX - dividerRectWidth / 2, y: 0 },
+            { type: "lineTo", x: midX - dividerRectWidth / 2, y: midY - 50 },
+            {
+              type: "quadraticCurveTo",
+              cpx: midX - dividerRectWidth / 2,
+              cpy: midY,
+              x: midX,
+              y: midY
+            },
+            {
+              type: "quadraticCurveTo",
+              cpx: midX + dividerRectWidth / 2,
+              cpy: midY,
+              x: midX + dividerRectWidth / 2,
+              y: midY - 50
+            },
+            { type: "lineTo", x: midX + dividerRectWidth / 2, y: 0 },
+            { type: "closePath" }
+          ],
+          "#c5d5d9",
+          1
+        )
+      );
+      const rightBarrierPrism0 = this.world.createEntity();
+      this.world.addComponent(
+        rightBarrierPrism0,
+        BackgroundFactory.createPolygon(
+          // top
+          [
+            vanishingPoint,
+            [rightDividerCenterLineX - 10, this.config.canvasHeight],
+            [rightDividerCenterLineX + 10, this.config.canvasHeight]
+          ],
+          "#FFF4C1FF",
+          1
+        )
+      );
+      const rightBarrierPrism1 = this.world.createEntity();
+      this.world.addComponent(
+        rightBarrierPrism1,
+        BackgroundFactory.createPolygon(
+          [
+            vanishingPoint,
+            // center point
+            [rightDividerCenterLineX - 10, this.config.canvasHeight],
+            [rightDividerCenterLineX - 20, this.config.canvasHeight]
+          ],
+          "#94CB99FF",
+          1
+        )
+      );
     }
     /**
      * Start the game
@@ -949,10 +1357,7 @@
         if (event.key === "p") {
           const gsEntities = this.world.getEntitiesWith("GameState");
           if (gsEntities.length > 0) {
-            const gameState = this.world.getComponent(
-              gsEntities[0],
-              "GameState"
-            );
+            const gameState = this.world.getComponent(gsEntities[0], "GameState");
             if (gameState) {
               if (gameState.isPaused) {
                 this.resume();
@@ -1060,6 +1465,15 @@
       this.gameInitialized = false;
       this.init();
     }
+    /**
+     * Preload game assets
+     * This method can be called before starting the game to ensure all images are ready
+     */
+    async preloadAssets(imagePaths) {
+      if (imagePaths.length > 0) {
+        await this.renderSystem.preloadImages(imagePaths);
+      }
+    }
   };
 
   // src/index.ts
@@ -1093,4 +1507,4 @@
     }
   });
 })();
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=script.js.map

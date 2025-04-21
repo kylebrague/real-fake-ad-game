@@ -49,10 +49,17 @@ export class PowerupSystem extends System {
    */
   applyRapidFirePowerup(entity: Entity, duration: number, multiplier = 0.5): void {
     // Remove any existing cooldown modifier first
-    if (this.world.getComponent(entity, "CooldownModifier")) {
-      this.world.removeComponent(entity, "CooldownModifier");
+    const existingModifier = this.world.getComponent<CooldownModifierComponent>(
+      entity,
+      "CooldownModifier"
+    );
+    if (existingModifier) {
+      if (multiplier < existingModifier.bulletCooldownMultiplier) {
+        this.world.removeComponent(entity, "CooldownModifier");
+      } else {
+        return; // Don't apply if existing modifier is stronger
+      }
     }
-
     // Add a new cooldown modifier component
     this.world.addComponent(entity, new CooldownModifierComponent(multiplier, duration, duration));
   }
@@ -65,16 +72,15 @@ export class PowerupSystem extends System {
     const powerup = this.world.getComponent<PowerupComponent>(powerupEntity, "Powerup");
 
     if (!powerup) return;
-
     // Apply different effects based on powerup type
     switch (powerup.powerupType) {
+      case "superRapidFire":
+        // Apply super rapid fire effect (75% faster shooting for 5 seconds)
+        this.applyRapidFirePowerup(playerEntity, 15, 0.25);
+        break;
       case "rapidFire":
         // Apply rapid fire effect (50% faster shooting for 5 seconds)
-        this.applyRapidFirePowerup(playerEntity, 5, 0.5);
-        break;
-      case "superRapidFire":
-        // Apply super rapid fire effect (75% faster shooting for 3 seconds)
-        this.applyRapidFirePowerup(playerEntity, 3, 0.25);
+        this.applyRapidFirePowerup(playerEntity, 15, 0.5);
         break;
       case "normalizedFire":
         // Remove any existing cooldown effects to restore normal firing rate
@@ -84,6 +90,7 @@ export class PowerupSystem extends System {
         break;
       default:
         // Handle other powerup types as needed
+        console.warn(`Unhandled powerup type: ${powerup.powerupType}`);
         break;
     }
   }

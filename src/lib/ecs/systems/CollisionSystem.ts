@@ -75,7 +75,7 @@ export class CollisionSystem extends System {
           bulletComponent.hit = true;
 
           // Check if enemy was destroyed for scoring
-          if (enemyHealth.isDead()) {
+          if (enemyHealth.currentHealth <= 0) {
             const enemy = this.world.getComponent<EnemyComponent>(enemyEntity, "Enemy");
             const players = this.world.getEntitiesWith("Player");
 
@@ -104,7 +104,7 @@ export class CollisionSystem extends System {
             // Apply bullet damage to powerup
             powerupHealth.currentHealth -= bulletComponent.damage;
             // If powerup is destroyed, process its effect
-            if (powerupHealth.isDead()) {
+            if (powerupHealth.currentHealth <= 0) {
               const powerupSystems = this.world.getSystems("PowerupSystem");
               if (powerupSystems.length > 0) {
                 const powerupSystem = powerupSystems[0] as PowerupSystem;
