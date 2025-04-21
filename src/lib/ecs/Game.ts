@@ -146,17 +146,16 @@ export class Game {
       BackgroundFactory.createPolygon(
         [
           [leftDividerCenterLineX, 0],
-          
+
           [leftDividerCenterLineX, this.config.canvasHeight],
           [rightDividerCenterLineX, this.config.canvasHeight],
           [rightDividerCenterLineX, 0],
-
         ],
         "#8b9699",
         0
       )
     );
-    
+
     // Left divider - using polygon for an angled shape
     BackgroundFactory.addBackgroundToWorld(
       this.world,
@@ -168,6 +167,19 @@ export class Game {
           [leftDividerCenterLineX + dividerRectWidth / 2, 0],
         ],
         "#c5d5d9",
+        1
+      )
+    );
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
+      BackgroundFactory.createPolygon(
+        [
+          [leftDividerCenterLineX + dividerRectWidth / 2 + 10, 0],
+          [leftDividerCenterLineX + dividerRectWidth / 2 + 0, this.config.canvasHeight],
+          [leftDividerCenterLineX + dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [leftDividerCenterLineX + dividerRectWidth / 2, 0],
+        ],
+        "#7E8C90FF",
         1
       )
     );
@@ -204,22 +216,7 @@ export class Game {
       )
     );
 
-    // // Right divider - using a wavy curved path
-    // const rightBarrier = this.world.createEntity();
-    // this.world.addComponent(
-    //   rightBarrier,
-    //   BackgroundFactory.createPolygon(
-    //     [
-    //       [(mainLines.rightBorder / 8) * 7 - dividerRectWidth / 2, 0],
-    //       [(mainLines.rightBorder / 8) * 7 - dividerRectWidth / 2 - 10, this.config.canvasHeight],
-    //       [(mainLines.rightBorder / 8) * 7 + dividerRectWidth / 2 - 10, this.config.canvasHeight],
-    //       [(mainLines.rightBorder / 8) * 7 + dividerRectWidth / 2, 0],
-    //     ],
-    //     "#c5d5d9",
-    //     1
-    //   )
-    // );
-
+    // Right divider - using polygon
     BackgroundFactory.addBackgroundToWorld(
       this.world,
       BackgroundFactory.createPolygon(
@@ -230,6 +227,19 @@ export class Game {
           [rightDividerCenterLineX + dividerRectWidth / 2, 0],
         ],
         "#c5d5d9",
+        1
+      )
+    );
+    BackgroundFactory.addBackgroundToWorld(
+      this.world,
+      BackgroundFactory.createPolygon(
+        [
+          [rightDividerCenterLineX - dividerRectWidth / 2, 0],
+          [rightDividerCenterLineX - dividerRectWidth / 2 - 10, this.config.canvasHeight],
+          [rightDividerCenterLineX - dividerRectWidth / 2 - 20, this.config.canvasHeight],
+          [rightDividerCenterLineX - dividerRectWidth / 2 - 10, 0],
+        ],
+        "#7E8C90FF",
         1
       )
     );
@@ -550,7 +560,7 @@ export class Game {
 
   /**
    * Configure perspective settings for the 3D depth effect
-   * 
+   *
    * @param options Configuration options for the perspective effect
    * @param options.enabled Whether the perspective effect is enabled (default: true)
    * @param options.vanishingPointY Y position of the vanishing point (default: 0 - top of screen)
