@@ -18,7 +18,7 @@ import {
   type BackgroundComponent,
   type PathCommand,
 } from "./components/CoreComponents";
-import { PlayerComponent, TagComponent, GameStateComponent } from "./components/GameComponents";
+import { PlayerComponent, TagComponent, GameStateComponent, MultiplierComponent } from "./components/GameComponents";
 
 /**
  * Main Game class using ECS architecture
@@ -84,8 +84,7 @@ export class Game {
     this.world.addSystem(new SpawnSystem(this.config));
     this.world.addSystem(new CleanupSystem());
 
-    // Create background entities
-    this.createBackgroundElements();
+
   }
 
   /**
@@ -97,7 +96,8 @@ export class Game {
     const gameStateEntity = this.world.createEntity();
     this.world.addComponent(gameStateEntity, new GameStateComponent());
     this.world.addComponent(gameStateEntity, new TagComponent("gameState"));
-
+    // Create background entities
+    this.createBackgroundElements();
     // Create player entity
     const player = this.world.createEntity();
 
@@ -114,7 +114,14 @@ export class Game {
       player,
       new SpriteComponent("assets/army-man-sprite.png", 32, 32, 9, 16, 0, false, 1, false, 4)
     );
-
+    const multiplier = this.world.createEntity();
+    this.world.addComponent(multiplier, new SizeComponent(400, 1));
+    this.world.addComponent(multiplier, new PositionComponent(this.config.canvasWidth / 2 - 200, this.config.canvasHeight * 2 / 3));
+    this.world.addComponent(multiplier, new TagComponent("multiplier"));
+    this.world.addComponent(multiplier, new CollisionComponent(true, 0, "multiplier"));
+    this.world.addComponent(multiplier, new MultiplierComponent(2));
+    this.world.addComponent(multiplier, new RenderComponent(
+      '#57FFE9B4',));
     // Set up input handlers
     this.setupInputHandlers();
     this.gameInitialized = true;
@@ -134,7 +141,6 @@ export class Game {
     };
 
     const dividerRectWidth = 20;
-    const vanishingPoint: [number, number] = [this.config.canvasWidth / 2, -9999];
     const leftDividerCenterLineX =
       mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2;
     const rightDividerCenterLineX =
@@ -359,6 +365,18 @@ export class Game {
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
+    // Handle continuous shooting if space is held down
+    const playerEntities = this.world.getEntitiesWith("Player");
+    if (playerEntities.length > 0) {
+      const playerEntity = playerEntities[0];
+      const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
+      
+      // If player is holding the shoot button, try to shoot
+      if (playerComponent?.isShooting) {
+        this.playerSystem.shoot(playerEntity);
+      }
+    }
+
     // Update the ECS world
     this.world.update(deltaTime);
 
@@ -470,10 +488,12 @@ export class Game {
           case "d":
             playerComponent.isMovingRight = true;
             break;
-          case " ":
+          case " ": // Space key for continuous shooting
+            playerComponent.isShooting = true;
+            break;
           case "w":
           case "ArrowUp":
-            // Shoot bullet
+            // Single shot (not continuous)
             this.playerSystem.shoot(playerEntity);
             break;
         }
@@ -509,6 +529,9 @@ export class Game {
           case "ArrowRight":
           case "d":
             playerComponent.isMovingRight = false;
+            break;
+          case " ": // Stop shooting when space is released
+            playerComponent.isShooting = false;
             break;
         }
       }

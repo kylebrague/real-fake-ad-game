@@ -165,6 +165,37 @@ export class BackgroundComponent implements Component {
     public fillRule: 'nonzero' | 'evenodd' = 'nonzero'
   ) {}
 }
+export class MovementPatternComponent implements Component {
+  readonly type = 'MovementPattern';
+
+    // Track elapsed time for pattern-based movement
+    public elapsedTime = 0;
+    // Track whether this is the first movement in the pattern 
+    public isFirstMovement = true;
+    // Store the original starting position
+    public originalX = 0;
+    public originalY = 0;
+    
+  constructor(
+    public patternType: 'circle' | 'linear' | 'sine' | 'custom' = 'linear',
+    // Linear pattern parameters
+    public pointA: [number, number] = [0, 0],
+    public pointB: [number, number] = [0, 0],
+    // Circle pattern parameters
+    public centerX = 0,
+    public centerY = 0,
+    public radius = 50,
+    public angularSpeed = Math.PI, // radians per second (π = 180° per second)
+    public startAngle = 0,
+    // Sine wave pattern parameters
+    public amplitude = 20,
+    public frequency = 1, // cycles per second
+    public axis: 'horizontal' | 'vertical' = 'horizontal',
+    // Common parameters
+    public duration = 2, // seconds for a complete cycle
+    public loop = true, // whether to loop the pattern
+  ) {}
+}
 
 /**
  * Types of path commands for Path2D operations

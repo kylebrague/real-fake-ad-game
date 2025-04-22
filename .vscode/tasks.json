@@ -10,19 +10,18 @@
       },
       "problemMatcher": [],
       "label": "npm: build",
-      "detail": "esbuild src/index.ts --bundle --outfile=dist/scripts/index.js"
+      "detail": "Build the project using Vite"
     },
     {
       "type": "npm",
-      "script": "watch",
-      "group": "build",
-      "problemMatcher": ["$esbuild"],
-      "label": "npm: watch",
-      "detail": "TypeScript rebuild on change",
-      "isBackground": true,
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
+      "script": "dev",
+      "group": {
+        "kind": "none",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "npm: dev",
+      "detail": "Run the project in development mode using Vite"
     }
   ]
 }

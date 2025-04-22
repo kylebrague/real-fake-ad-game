@@ -9,6 +9,7 @@ import {
 } from "../components/CoreComponents";
 import {
   EnemyComponent,
+  MultiplierComponent,
   PowerupComponent,
   type GameStateComponent,
 } from "../components/GameComponents";
@@ -71,6 +72,8 @@ export class SpawnSystem extends System {
       this.spawnPowerup();
       this.lastPowerupSpawnTime = 0;
     }
+    
+  
   }
 
   /**

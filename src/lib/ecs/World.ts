@@ -1,10 +1,10 @@
-import type { Component } from './Component';
-import { Entity } from './Entity';
-import type { System } from './System';
+import type { Component } from "./Component";
+import { Entity } from "./Entity";
+import type { System } from "./System";
 
 /**
  * World class for the ECS architecture
- * 
+ *
  * The World manages all entities, components and systems.
  * It provides methods for creating entities, adding components,
  * querying entities with specific components, and updating systems.
@@ -31,14 +31,28 @@ export class World {
    * Remove an entity and all its components
    */
   removeEntity(entity: Entity): void {
-    const index = this.entities.findIndex(e => e.equals(entity));
+    const index = this.entities.findIndex((e) => e.equals(entity));
     if (index !== -1) {
       this.entities.splice(index, 1);
       this.components.delete(entity.id);
       this.cacheValid = false;
     }
   }
-
+  /**
+   * Clone an entity
+   * This creates a new entity with the same components values as the original
+   */
+  cloneEntity(entity: Entity): Entity {
+    const newEntity = this.createEntity();
+    const entityComponents = this.components.get(entity.id);
+    if (entityComponents) {
+      for (const [type, component] of entityComponents.entries()) {
+        const clonedComponent = { ...component };
+        this.addComponent(newEntity, clonedComponent);
+      }
+    }
+    return newEntity;
+  }
   /**
    * Add a component to an entity
    */
@@ -86,7 +100,7 @@ export class World {
    * This allows other systems to find specific system instances
    */
   getSystems(systemName: string): System[] {
-    return this.systems.filter(system => {
+    return this.systems.filter((system) => {
       const className = system.constructor.name;
       return className === systemName;
     });
@@ -96,25 +110,23 @@ export class World {
    * Get all entities that have the specified component types
    */
   getEntitiesWith(...componentTypes: string[]): Entity[] {
-    const cacheKey = componentTypes.sort().join(',');
-    
+    const cacheKey = componentTypes.sort().join(",");
+
     if (!this.cacheValid) {
       this.refreshCache();
     }
-    
+
     if (!this.entityComponentCache.has(cacheKey)) {
-      const matchingEntities = this.entities.filter(entity => {
+      const matchingEntities = this.entities.filter((entity) => {
         const entityComponents = this.components.get(entity.id);
         if (!entityComponents) return false;
-        
-        return componentTypes.every(type => 
-          entityComponents.has(type)
-        );
+
+        return componentTypes.every((type) => entityComponents.has(type));
       });
-      
+
       this.entityComponentCache.set(cacheKey, matchingEntities);
     }
-    
+
     return this.entityComponentCache.get(cacheKey) || [];
   }
 

@@ -13,6 +13,7 @@ import type {
   PlayerComponent,
   GameStateComponent,
   TagComponent,
+  MultiplierComponent,
 } from "../components/GameComponents";
 import type { PowerupSystem } from "./PowerupSystem";
 
@@ -35,6 +36,89 @@ export class CollisionSystem extends System {
     this.checkPlayerPowerupCollisions();
     this.checkOffscreenEntities();
     this.checkEnemyReachedBottom();
+    this.checkCollisionsWithMultiplier();
+  }
+  /**
+   * Check for collisions between other collidable entities and multiplier entities
+   */
+  private checkCollisionsWithMultiplier(): void {
+    const multipliers = this.world.getEntitiesWith("Multiplier");
+    const collidables = this.world.getEntitiesWith("Collision");
+
+    for (const multiplier of multipliers) {
+      const multiplierComponent = this.world.getComponent<MultiplierComponent>(
+        multiplier,
+        "Multiplier"
+      );
+      const multiplierPos = this.world.getComponent<PositionComponent>(multiplier, "Position");
+      const multiplierSize = this.world.getComponent<SizeComponent>(multiplier, "Size");
+
+      if (!multiplierComponent || !multiplierPos || !multiplierSize) continue;
+
+      for (const collidable of collidables) {
+        if (multiplier.equals(collidable)) continue; // Skip self-collision
+        const collidablePos = this.world.getComponent<PositionComponent>(collidable, "Position");
+        const collidableSize = this.world.getComponent<SizeComponent>(collidable, "Size");
+
+        if (!collidablePos || !collidableSize) continue;
+
+        // Check for collision
+        if (this.isColliding(multiplierPos, multiplierSize, collidablePos, collidableSize)) {
+          // Determine the side the collision happened from relative to the multiplier
+          const isCollidedFromBottom =
+            collidablePos.y + collidableSize.height <= multiplierPos.y + multiplierSize.height;
+
+          // Clone the collidable entity as many times as the multiplier value
+          for (let i = 0; i < multiplierComponent.value; i++) {
+            const exitY = isCollidedFromBottom
+              ? multiplierPos.y + multiplierSize.height + 2 // Exit below multiplier
+              : multiplierPos.y - multiplierSize.height - collidableSize.height - 2; // Exit above multiplier
+            // Clone the original entity ONCE per iteration
+            const clonedCollidable = this.world.cloneEntity(collidable);
+
+            const clonedCollidablePos = this.world.getComponent<PositionComponent>(
+              clonedCollidable,
+              "Position"
+            );
+            const clonedCollidableSize = this.world.getComponent<SizeComponent>(
+              clonedCollidable,
+              "Size"
+            );
+
+            if (!clonedCollidablePos || !clonedCollidableSize) {
+              // If cloning failed or components are missing, remove the failed clone
+              this.world.removeEntity(clonedCollidable);
+              continue;
+            }
+
+            // Distribute the cloned entities horizontally across the multiplier's width
+            // Calculate the starting X position to center the distribution
+            const totalClonedWidth = clonedCollidableSize.width * multiplierComponent.value;
+            const spacing = 2 * collidableSize.width;
+            // (multiplierSize.width - totalClonedWidth) / (multiplierComponent.value + 1);
+            if (i !== 0) {
+              const startX = collidablePos.x + spacing;
+              const newX = startX + i * (clonedCollidableSize.width + spacing);
+              if (newX > multiplierPos.x + multiplierSize.width) {
+                clonedCollidablePos.x = multiplierPos.x + multiplierSize.width;
+              } else if (newX < multiplierPos.x) {
+                clonedCollidablePos.x = multiplierPos.x;
+              } else {
+                clonedCollidablePos.x = newX;
+              }
+            }
+            // Set the Y position based on the collision side
+            clonedCollidablePos.y = exitY;
+          }
+
+          // Remove the original entity that passed through the multiplier
+          this.world.removeEntity(collidable);
+
+          // Break from the inner loop (collidables) since this one has been processed
+          break;
+        }
+      }
+    }
   }
 
   /**

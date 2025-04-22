@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Configure the perspective effect
   game.configurePerspective({
-    enabled: true,          // Enable the perspective effect
-    vanishingPointY: 0,     // Vanishing point at the top of the screen
-    horizonY: canvas.height * -0.5, // Horizon line at 50% from the top
-    depthFactor: 0.9,       // How strong the perspective effect is (stronger than default)
-    minScale: 0.001         // Objects at horizon scale to 0.1% of original size
+    enabled: false,         
+    vanishingPointY: canvas.height * -0.5,     
+    horizonY: canvas.height * -0.5, 
+    depthFactor: 0.9,       
+    minScale: 0.001         
   });
   
   // Initialize and start the game

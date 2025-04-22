@@ -26,4 +26,5 @@ export class MovementSystem extends System {
       }
     }
   }
+  
 }

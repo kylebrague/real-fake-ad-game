@@ -12,8 +12,21 @@ export class PlayerComponent implements Component {
     public score = 0,
     public isMovingLeft = false,
     public isMovingRight = false,
+    public isShooting = false,      // Whether the player is holding the shoot button
     public bulletCooldown = 0,       // Current cooldown time remaining
     public bulletCooldownMax = 0.25  // Time between shots in seconds (4 shots per second)
+  ) {}
+}
+
+/**
+ * MultiplierComponent
+ * Marks an entity as a multiplier and stores multiplier-specific data
+ */
+export class MultiplierComponent implements Component {
+  readonly type = 'Multiplier';
+  
+  constructor(
+    public value = 5
   ) {}
 }
 

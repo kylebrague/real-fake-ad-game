@@ -7,7 +7,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch Server with Dev Mode",
+      "name": "Launch Vite",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "console": "integratedTerminal",
@@ -15,37 +15,6 @@
       "skipFiles": [
         "<node_internals>/**"
       ]
-    },
-    {
-      "type": "chrome",
-      "request": "launch",
-      "name": "Launch Chrome against localhost",
-      "url": "http://localhost:3000",
-      "webRoot": "${workspaceFolder}/dist",
-      "sourceMapPathOverrides": {
-        "webpack:///./~/*": "${workspaceFolder}/node_modules/*",
-        "webpack:///./*": "${workspaceFolder}/*",
-        "webpack:///*": "*"
-      }
-    },
-    {
-      "name": "Full Stack: Node + Chrome",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      "serverReadyAction": {
-        "pattern": "Server running at (https?://.+:\\d+)/",
-        "uriFormat": "%s",
-        "action": "debugWithChrome",
-        "webRoot": "${workspaceFolder}/dist",
-        "killOnServerStop": true
-      }
-    }
+    },    
   ]
 }
