@@ -93,7 +93,7 @@ export class SpawnSystem extends System {
     this.world.addComponent(enemy, new SizeComponent(30, 30));
     this.world.addComponent(enemy, new VelocityComponent(0, 50)); // Move downward
     this.world.addComponent(enemy, new RenderComponent("red"));
-    this.world.addComponent(enemy, new HealthComponent(1));
+    this.world.addComponent(enemy, new HealthComponent(10));
     this.world.addComponent(enemy, new CollisionComponent(true, 0, "enemy"));
     this.world.addComponent(enemy, new EnemyComponent("basic", 10));
   }
@@ -140,7 +140,7 @@ export class SpawnSystem extends System {
     this.world.addComponent(powerup, new SizeComponent(30, 30));
     this.world.addComponent(powerup, new VelocityComponent(0, 75)); // Move downward
     this.world.addComponent(powerup, new RenderComponent(color));
-    this.world.addComponent(powerup, new HealthComponent(1));
+    this.world.addComponent(powerup, new HealthComponent(10));
     this.world.addComponent(powerup, new CollisionComponent(true, 0, "powerup"));
     this.world.addComponent(powerup, new PowerupComponent(powerupType, 1));
   }

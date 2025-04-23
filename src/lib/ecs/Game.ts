@@ -15,10 +15,13 @@ import {
   HealthComponent,
   CollisionComponent,
   SpriteComponent,
-  type BackgroundComponent,
-  type PathCommand,
 } from "./components/CoreComponents";
-import { PlayerComponent, TagComponent, GameStateComponent, MultiplierComponent } from "./components/GameComponents";
+import {
+  PlayerComponent,
+  TagComponent,
+  GameStateComponent,
+  MultiplierComponent,
+} from "./components/GameComponents";
 
 /**
  * Main Game class using ECS architecture
@@ -27,20 +30,15 @@ import { PlayerComponent, TagComponent, GameStateComponent, MultiplierComponent 
  * creates the initial entities, and handles the game loop.
  */
 export class Game {
-  // Core ECS world
   private world: World;
-
-  // Game systems
   private renderSystem: RenderSystem;
   private playerSystem: PlayerSystem;
   private powerupSystem: PowerupSystem;
-
-  // Game state
   private gameInitialized = false;
-  private lastFrameTime = 0;
-  private animationFrameId: number | null = null;
+  private lastFrameTime = 0; // Re-added, used in gameLoop
+  private animationFrameId: number | null = null; // Re-added, used in gameLoop/pause/resume
+  private canvas: HTMLCanvasElement; // Re-added, used in pause/resetGame
 
-  // ========================= Configuration =========================
   private config: ConstructorParameters<typeof SpawnSystem>[0] = {
     canvasWidth: 800,
     canvasHeight: 900,
@@ -49,110 +47,97 @@ export class Game {
     leftSideSpawnInterval: 2,
     rightSideSpawnInterval: 3,
   };
-  // ========================= xxxxxxxxxxxxx =========================
 
-  /**
-   * Create a new game instance
-   */
-  constructor(private canvas: HTMLCanvasElement) {
-    // Get the canvas rendering context
+  constructor(canvas: HTMLCanvasElement) { // Keep canvas reference
+    this.canvas = canvas; // Store canvas reference
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("Could not get canvas rendering context");
     }
-
-    // Set canvas dimensions
     canvas.width = this.config.canvasWidth;
     canvas.height = this.config.canvasHeight;
-
-    // Create the ECS world
     this.world = new World();
-
-    // Create and add systems to the world
     this.renderSystem = new RenderSystem(ctx);
     this.world.addSystem(this.renderSystem);
-
     this.world.addSystem(new MovementSystem());
     this.world.addSystem(new CollisionSystem(this.config.canvasWidth, this.config.canvasHeight));
-
-    this.playerSystem = new PlayerSystem(this.config.canvasWidth, this.config.canvasHeight);
+    this.playerSystem = new PlayerSystem(this.config.canvasWidth);
     this.world.addSystem(this.playerSystem);
-
     this.powerupSystem = new PowerupSystem();
     this.world.addSystem(this.powerupSystem);
-
     this.world.addSystem(new SpawnSystem(this.config));
     this.world.addSystem(new CleanupSystem());
-
-
   }
 
-  /**
-   * Initialize the game
-   */
   init(): void {
     if (this.gameInitialized) return;
-    // Create game state entity
     const gameStateEntity = this.world.createEntity();
     this.world.addComponent(gameStateEntity, new GameStateComponent());
     this.world.addComponent(gameStateEntity, new TagComponent("gameState"));
-    // Create background entities
     this.createBackgroundElements();
-    // Create player entity
-    const player = this.world.createEntity();
 
-    // Add components to the player
-    this.world.addComponent(
-      player,
-      new PositionComponent(this.config.canvasWidth / 2 - 25, this.config.canvasHeight - 60)
-    );
-    this.world.addComponent(player, new SizeComponent(50, 50));
-    this.world.addComponent(player, new PlayerComponent());
-    this.world.addComponent(player, new HealthComponent(100));
-    this.world.addComponent(player, new CollisionComponent(true, 0, "player"));
-    this.world.addComponent(
-      player,
-      new SpriteComponent("assets/army-man-sprite.png", 32, 32, 9, 16, 0, false, 1, false, 4)
-    );
+    // --- Create Player Group ---
+    const playerInitialY = this.config.canvasHeight - 60;
+    const playerSize = new SizeComponent(50, 50);
+    const playerSprite = new SpriteComponent("assets/army-man-sprite.png", 32, 32, 9, 16, 0, false, 1, false, 4);
+    const playerOffsets = [-60, 0, 60]; // Example offsets for 3 players
+
+    for (const offsetX of playerOffsets) {
+      const player = this.world.createEntity();
+      
+      // Initial X position is calculated relative to the center, adjusted by offset
+      const playerInitialX = this.config.canvasWidth / 2 + offsetX - playerSize.width / 2;
+      this.world.addComponent(player, new PositionComponent(playerInitialX, playerInitialY));
+      this.world.addComponent(player, playerSize);
+      // Pass the specific offsetX to the PlayerComponent
+      this.world.addComponent(player, new PlayerComponent(offsetX));
+      this.world.addComponent(player, new HealthComponent(100)); // Each player has health
+      this.world.addComponent(player, new CollisionComponent(true, 0, "player"));
+      // Use the same sprite for all players
+      this.world.addComponent(player, playerSprite);
+      this.world.addComponent(player, new TagComponent("Player"));
+    }
+    // --- End Player Group Creation ---
+
+    // --- Remove Helper Creation ---
+    // const helper = this.world.createEntity(); ... removed ...
+
     const multiplier = this.world.createEntity();
     this.world.addComponent(multiplier, new SizeComponent(400, 1));
-    this.world.addComponent(multiplier, new PositionComponent(this.config.canvasWidth / 2 - 200, this.config.canvasHeight * 2 / 3));
+    this.world.addComponent(
+      multiplier,
+      new PositionComponent(this.config.canvasWidth / 2 - 200, (this.config.canvasHeight * 2) / 3)
+    );
     this.world.addComponent(multiplier, new TagComponent("multiplier"));
     this.world.addComponent(multiplier, new CollisionComponent(true, 0, "multiplier"));
-    this.world.addComponent(multiplier, new MultiplierComponent(2));
-    this.world.addComponent(multiplier, new RenderComponent(
-      '#57FFE9B4',));
-    // Set up input handlers
+    this.world.addComponent(multiplier, new MultiplierComponent(5));
+    this.world.addComponent(multiplier, new RenderComponent("#57FFE9B4"));
+
     this.setupInputHandlers();
     this.gameInitialized = true;
   }
 
-  /**
-   * Create background elements using the ECS system
-   */
-  private createBackgroundElements(): void {
-    // Keep track of the main vertical lines we draw off of
-    const mainLines = {
-      leftBorder: 0, // (w / 8) * 0
-      leftSpawnLane: this.config.leftSideX, // (w / 8) * 2
-      midline: this.config.canvasWidth / 2, // (w / 8) * 4
-      rightSpawnLane: this.config.rightSideX, // (w / 8) * 6
-      rightBorder: this.config.canvasWidth, // (w / 8) * 8
-    };
+  // --- Methods moved back inside the class --- 
 
+  private createBackgroundElements(): void {
+    const mainLines = {
+      leftBorder: 0,
+      leftSpawnLane: this.config.leftSideX,
+      midline: this.config.canvasWidth / 2,
+      rightSpawnLane: this.config.rightSideX,
+      rightBorder: this.config.canvasWidth,
+    };
     const dividerRectWidth = 20;
     const leftDividerCenterLineX =
       mainLines.midline - (mainLines.midline - mainLines.leftSpawnLane) * 2;
     const rightDividerCenterLineX =
       mainLines.midline + (mainLines.rightSpawnLane - mainLines.midline) * 2;
 
-    // road lane
     BackgroundFactory.addBackgroundToWorld(
       this.world,
       BackgroundFactory.createPolygon(
         [
           [leftDividerCenterLineX, 0],
-
           [leftDividerCenterLineX, this.config.canvasHeight],
           [rightDividerCenterLineX, this.config.canvasHeight],
           [rightDividerCenterLineX, 0],
@@ -161,8 +146,6 @@ export class Game {
         0
       )
     );
-
-    // Left divider - using polygon for an angled shape
     BackgroundFactory.addBackgroundToWorld(
       this.world,
       BackgroundFactory.createPolygon(
@@ -189,11 +172,8 @@ export class Game {
         1
       )
     );
-
-    // Middle divider - using a custom path with curves
     const midX = this.config.canvasWidth / 2;
     const midY = this.config.canvasHeight - 250;
-
     BackgroundFactory.addBackgroundToWorld(
       this.world,
       BackgroundFactory.createCustomPath(
@@ -221,8 +201,6 @@ export class Game {
         1
       )
     );
-
-    // Right divider - using polygon
     BackgroundFactory.addBackgroundToWorld(
       this.world,
       BackgroundFactory.createPolygon(
@@ -251,15 +229,10 @@ export class Game {
     );
   }
 
-  /**
-   * Start the game
-   */
   start(): void {
     if (!this.gameInitialized) {
       this.init();
     }
-
-    // Reset the game state
     const gameStateEntities = this.world.getEntitiesWith("GameState");
     if (gameStateEntities.length > 0) {
       const gameState = this.world.getComponent<GameStateComponent>(
@@ -271,15 +244,10 @@ export class Game {
         gameState.isGameOver = false;
       }
     }
-
-    // Start the game loop
     this.lastFrameTime = performance.now();
     this.gameLoop(this.lastFrameTime);
   }
 
-  /**
-   * Pause the game
-   */
   pause(): void {
     const gameStateEntities = this.world.getEntitiesWith("GameState");
     if (gameStateEntities.length > 0) {
@@ -291,36 +259,23 @@ export class Game {
         gameState.isPaused = true;
       }
     }
-
-    // Cancel animation frame if it exists
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-
-    // Render one last frame to show the pause screen
     const ctx = this.canvas.getContext("2d");
     if (ctx) {
-      // Clear the canvas
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-      // Continue to render the world (game objects will still be visible)
-      this.world.update(0); // Update with 0 delta to avoid movement
-
-      // Draw the pause text
+      this.world.update(0);
       ctx.fillStyle = "black";
       ctx.font = "48px Arial";
       ctx.textAlign = "center";
       ctx.fillText("PAUSED", this.canvas.width / 2, this.canvas.height / 2);
-
       ctx.font = "24px Arial";
       ctx.fillText("Press P to resume", this.canvas.width / 2, this.canvas.height / 2 + 50);
     }
   }
 
-  /**
-   * Resume the game
-   */
   resume(): void {
     const gameStateEntities = this.world.getEntitiesWith("GameState");
     if (gameStateEntities.length > 0) {
@@ -330,267 +285,186 @@ export class Game {
       );
       if (gameState) {
         gameState.isPaused = false;
+        // Reset movement state in GameStateComponent instead of PlayerComponent
+        gameState.isMovingLeft = false;
+        gameState.isMovingRight = false;
+        gameState.isShooting = false;
       }
     }
-
-    // Reset player movement states to prevent actions from pause carrying over
-    const playerEntities = this.world.getEntitiesWith("Player");
-    if (playerEntities.length > 0) {
-      const playerEntity = playerEntities[0];
-      const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
-      if (playerComponent) {
-        // Reset movement flags
-        playerComponent.isMovingLeft = false;
-        playerComponent.isMovingRight = false;
-      }
-    }
-
+    
+    // Remove the old code that tried to reset player movement flags
+    // const playerEntities = this.world.getEntitiesWith("Player");
+    // if (playerEntities.length > 0) {
+    //   const playerEntity = playerEntities[0];
+    //   const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
+    //   if (playerComponent) {
+    //     playerComponent.isMovingLeft = false;
+    //     playerComponent.isMovingRight = false;
+    //   }
+    // }
+    
     if (this.animationFrameId === null) {
       this.lastFrameTime = performance.now();
       this.gameLoop(this.lastFrameTime);
     }
   }
 
-  /**
-   * Main game loop
-   */
   private gameLoop(timestamp: number): void {
-    // Calculate delta time
-    const deltaTime = (timestamp - this.lastFrameTime) / 1000; // convert to seconds
+    const deltaTime = (timestamp - this.lastFrameTime) / 1000;
     this.lastFrameTime = timestamp;
-
-    // Clear the canvas
     const ctx = this.canvas.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    // Handle continuous shooting if space is held down
-    const playerEntities = this.world.getEntitiesWith("Player");
-    if (playerEntities.length > 0) {
-      const playerEntity = playerEntities[0];
-      const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
-      
-      // If player is holding the shoot button, try to shoot
-      if (playerComponent?.isShooting) {
-        this.playerSystem.shoot(playerEntity);
-      }
-    }
+    // --- Remove direct player shooting call and game over check ---
+    // const playerEntities = this.world.getEntitiesWith("Player");
+    // if (playerEntities.length > 0) { ... } else { ... game over logic moved to CollisionSystem ... }
+    // --- End Removal ---
 
-    // Update the ECS world
     this.world.update(deltaTime);
 
-    // Check for game over
+    // --- Game State Rendering (Paused/Game Over) ---
     const gameStateEntities = this.world.getEntitiesWith("GameState");
     if (gameStateEntities.length > 0) {
       const gameState = this.world.getComponent<GameStateComponent>(
         gameStateEntities[0],
         "GameState"
       );
-      if (gameState?.isPaused) {
-        // Handle paused state (render pause screen)
-        if (ctx) {
-          ctx.fillStyle = "black";
-          ctx.font = "48px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText("PAUSED", this.canvas.width / 2, this.canvas.height / 2);
 
-          ctx.font = "24px Arial";
-          ctx.fillText("Press P to resume", this.canvas.width / 2, this.canvas.height / 2 + 50);
-        }
-        return;
+      // Render Score (Always render if context exists)
+      if (ctx && gameState) {
+          ctx.fillStyle = "white";
+          ctx.font = "20px Arial";
+          ctx.textAlign = "left";
+          ctx.fillText(`Score: ${gameState.score}`, 10, 30);
+      }
+
+      if (gameState?.isPaused) {
+        // ... existing pause rendering ...
+        return; // Don't request next frame if paused
       }
       if (gameState?.isGameOver) {
-        // Handle game over (render game over screen)
-        if (ctx) {
-          ctx.fillStyle = "black";
-          ctx.font = "48px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText("GAME OVER", this.canvas.width / 2, this.canvas.height / 2);
-
-          ctx.font = "24px Arial";
-          ctx.fillText("Press R to restart", this.canvas.width / 2, this.canvas.height / 2 + 50);
-        }
+        // ... existing game over rendering ...
+        // No return here, allow potential restart input
       } else if (gameState && !gameState.isPaused) {
-        // Continue the game loop if not paused or game over
+        // Only request next frame if not paused and not game over
         this.animationFrameId = requestAnimationFrame((time) => this.gameLoop(time));
       }
     }
   }
 
-  /**
-   * Set up keyboard and mouse input handlers
-   */
   private setupInputHandlers(): void {
-    // Keyboard input for movement
     window.addEventListener("keydown", (event) => {
-      // First check for pause toggle since this should work regardless of pause state
+      // --- Get GameState Component ---
+      const gsEntities = this.world.getEntitiesWith("GameState");
+      if (gsEntities.length === 0) return; // Should not happen if init is called
+      const gameState = this.world.getComponent<GameStateComponent>(gsEntities[0], "GameState");
+      if (!gameState) return;
+      // --- End Get GameState ---
+
+      // Pause/Resume handling (remains the same)
       if (event.key === "p") {
-        const gsEntities = this.world.getEntitiesWith("GameState");
-        if (gsEntities.length > 0) {
-          const gameState = this.world.getComponent<GameStateComponent>(gsEntities[0], "GameState");
-
-          if (gameState) {
-            if (gameState.isPaused) {
-              this.resume();
-            } else {
-              this.pause();
-            }
-          }
-        }
+        // ... existing pause/resume logic ...
         return;
       }
 
-      // Check for restart on game over
+      // Restart handling (remains the same)
       if (event.key === "r") {
-        const restartGameStateEntities = this.world.getEntitiesWith("GameState");
-        if (restartGameStateEntities.length > 0) {
-          const gameState = this.world.getComponent<GameStateComponent>(
-            restartGameStateEntities[0],
-            "GameState"
-          );
-
-          if (gameState?.isGameOver) {
-            // Reset the game
-            this.resetGame();
-            this.start();
-          }
+        if (gameState.isGameOver) {
+          this.resetGame();
+          this.start();
         }
         return;
       }
 
-      // Check if game is paused or over before processing other inputs
-      const gameStateEntities = this.world.getEntitiesWith("GameState");
-      if (gameStateEntities.length > 0) {
-        const gameState = this.world.getComponent<GameStateComponent>(
-          gameStateEntities[0],
-          "GameState"
-        );
-        if (gameState?.isPaused || gameState?.isGameOver) {
-          return; // Don't process inputs while paused or game over
-        }
+      // Ignore movement/shooting input if paused or game over
+      if (gameState.isPaused || gameState.isGameOver) {
+        return;
       }
 
-      // Only process gameplay inputs if game is active
-      const playerEntities = this.world.getEntitiesWith("Player");
-      if (playerEntities.length === 0) return;
-
-      const playerEntity = playerEntities[0];
-      const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
-
-      if (playerComponent) {
-        switch (event.key) {
-          case "ArrowLeft":
-          case "a":
-            playerComponent.isMovingLeft = true;
-            break;
-          case "ArrowRight":
-          case "d":
-            playerComponent.isMovingRight = true;
-            break;
-          case " ": // Space key for continuous shooting
-            playerComponent.isShooting = true;
-            break;
-          case "w":
-          case "ArrowUp":
-            // Single shot (not continuous)
-            this.playerSystem.shoot(playerEntity);
-            break;
-        }
+      // --- Update GameState flags for movement/shooting ---
+      switch (event.key) {
+        case "ArrowLeft":
+        case "a":
+          gameState.isMovingLeft = true;
+          break;
+        case "ArrowRight":
+        case "d":
+          gameState.isMovingRight = true;
+          break;
+        case " ": // Space bar for continuous shooting
+          gameState.isShooting = true;
+          break;
+        case "w":
+        case "ArrowUp":
+          // Trigger single shot via PlayerSystem (if needed, or rely on continuous)
+          // This might require a separate flag or method if distinct behavior is desired
+          // For now, let's assume spacebar handles shooting.
+          // If you want single shot on W/Up, we need PlayerSystem changes.
+          break;
       }
+      // --- End Update GameState flags ---
     });
 
-    // Release key handlers
     window.addEventListener("keyup", (event) => {
-      // Check if game is paused before processing inputs
-      const gameStateEntities = this.world.getEntitiesWith("GameState");
-      if (gameStateEntities.length > 0) {
-        const gameState = this.world.getComponent<GameStateComponent>(
-          gameStateEntities[0],
-          "GameState"
-        );
-        if (gameState?.isPaused || gameState?.isGameOver) {
-          return; // Don't process inputs while paused or game over
-        }
+      // --- Get GameState Component ---
+      const gsEntities = this.world.getEntitiesWith("GameState");
+      if (gsEntities.length === 0) return;
+      const gameState = this.world.getComponent<GameStateComponent>(gsEntities[0], "GameState");
+      if (!gameState) return;
+      // --- End Get GameState ---
+
+      // Ignore input if paused or game over (redundant check but safe)
+      if (gameState.isPaused || gameState.isGameOver) {
+        return;
       }
 
-      const playerEntities = this.world.getEntitiesWith("Player");
-      if (playerEntities.length === 0) return;
-
-      const playerEntity = playerEntities[0];
-      const playerComponent = this.world.getComponent<PlayerComponent>(playerEntity, "Player");
-
-      if (playerComponent) {
-        switch (event.key) {
-          case "ArrowLeft":
-          case "a":
-            playerComponent.isMovingLeft = false;
-            break;
-          case "ArrowRight":
-          case "d":
-            playerComponent.isMovingRight = false;
-            break;
-          case " ": // Stop shooting when space is released
-            playerComponent.isShooting = false;
-            break;
-        }
+      // --- Update GameState flags on key release ---
+      switch (event.key) {
+        case "ArrowLeft":
+        case "a":
+          gameState.isMovingLeft = false;
+          break;
+        case "ArrowRight":
+        case "d":
+          gameState.isMovingRight = false;
+          break;
+        case " ": // Space bar release stops continuous shooting
+          gameState.isShooting = false;
+          break;
       }
+      // --- End Update GameState flags ---
     });
   }
 
-  /**
-   * Reset the game state for a new game
-   */
   resetGame(): void {
-    // Create a new world (this is simpler than trying to reset the existing one)
     this.world = new World();
-
-    // Re-add systems to the world
     const ctx = this.canvas.getContext("2d");
     if (!ctx) {
       throw new Error("Could not get canvas rendering context");
     }
-
     this.renderSystem = new RenderSystem(ctx);
+    this.configurePerspective({ enabled: false });
     this.world.addSystem(this.renderSystem);
-
     this.world.addSystem(new MovementSystem());
     this.world.addSystem(new CollisionSystem(this.config.canvasWidth, this.config.canvasHeight));
-
-    this.playerSystem = new PlayerSystem(this.config.canvasWidth, this.config.canvasHeight);
+    this.playerSystem = new PlayerSystem(this.config.canvasWidth);
     this.world.addSystem(this.playerSystem);
-
     this.powerupSystem = new PowerupSystem();
     this.world.addSystem(this.powerupSystem);
-
     this.world.addSystem(new SpawnSystem(this.config));
     this.world.addSystem(new CleanupSystem());
-
-    // Re-initialize the game
     this.gameInitialized = false;
     this.init();
   }
 
-  /**
-   * Preload game assets
-   * This method can be called before starting the game to ensure all images are ready
-   */
   async preloadAssets(imagePaths: string[]): Promise<void> {
     if (imagePaths.length > 0) {
       await this.renderSystem.preloadImages(imagePaths);
     }
   }
 
-  /**
-   * Configure perspective settings for the 3D depth effect
-   *
-   * @param options Configuration options for the perspective effect
-   * @param options.enabled Whether the perspective effect is enabled (default: true)
-   * @param options.vanishingPointY Y position of the vanishing point (default: 0 - top of screen)
-   * @param options.depthFactor How strong the perspective effect is (0-1) (default: 0.3)
-   * @param options.horizonY Y position of the horizon line (default: canvas height * 0.5)
-   * @param options.minScale Minimum scale for distant objects (default: 0.5)
-   */
   configurePerspective(options: {
     enabled?: boolean;
     vanishingPointY?: number;

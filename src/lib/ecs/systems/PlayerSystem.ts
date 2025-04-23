@@ -1,70 +1,140 @@
 import type { Entity } from '../Entity';
 import { System } from '../System';
-import { 
-  PositionComponent, 
-  SizeComponent, 
+import {
+  PositionComponent,
+  SizeComponent,
   VelocityComponent,
   RenderComponent,
-  type HealthComponent,
   CollisionComponent
 } from '../components/CoreComponents';
-import { 
-  type PlayerComponent, 
-  BulletComponent, 
-  type CooldownModifierComponent, 
-  type GameStateComponent
+import {
+  type PlayerComponent,
+  BulletComponent,
+  // HelperComponent, // Removed HelperComponent import
+  type CooldownModifierComponent,
+  type GameStateComponent, // Import GameStateComponent
 } from '../components/GameComponents';
 
 /**
- * PlayerSystem handles player-specific behavior including movement and bullet creation
- * 
- * This is a good example of a focused system that handles interactions specific
- * to entities with PlayerComponent
+ * PlayerSystem handles player group behavior including movement and shooting.
  */
 export class PlayerSystem extends System {
   private canvasWidth: number;
-  private canvasHeight: number;
-  private playerSpeed = 400; // pixels per second
+  private groupCenterX: number; // Track the logical center of the player group
 
-  constructor(canvasWidth: number, canvasHeight: number) {
-    super(['Player', 'Position']);
+  constructor(canvasWidth: number) {
+    // Query for Player entities that have Position and Size
+    super(['Player', 'Position', 'Size']);
     this.canvasWidth = canvasWidth;
-    this.canvasHeight = canvasHeight;
+    // Initialize group center (can be refined, e.g., based on initial player positions)
+    this.groupCenterX = canvasWidth / 2;
   }
 
   update(deltaTime: number): void {
-    // Get all entities with Player and Position components
-    const playerEntities = this.world.getEntitiesWith('Player', 'Position');
+    // Get GameState for input flags
+    const gameStateEntities = this.world.getEntitiesWith("GameState");
+    if (gameStateEntities.length === 0) return;
+    const gameState = this.world.getComponent<GameStateComponent>(gameStateEntities[0], "GameState");
+    if (!gameState) return;
+
+    // --- Group Movement Calculation ---
+    let groupDx = 0;
+    // Use a representative speed (e.g., from the first player found, or a default)
+    // Ideally, all players in the group should have the same speed.
+    const players = this.world.getEntitiesWith('Player', 'Position', 'Size');
+    if (players.length === 0) {
+        // If no players left, potentially trigger game over elsewhere
+        return; 
+    }
+    const representativePlayerComp = this.world.getComponent<PlayerComponent>(players[0], 'Player');
+    const groupSpeed = representativePlayerComp ? representativePlayerComp.speed : 400; // Default speed
+
+    if (gameState.isMovingLeft) {
+      groupDx -= groupSpeed * deltaTime;
+    }
+    if (gameState.isMovingRight) {
+      groupDx += groupSpeed * deltaTime;
+    }
+
+    // Update the logical group center, clamping it so the entire group stays on screen
+    // This requires knowing the min/max offsetX of the group members
+    let minOffsetX = 0;
+    let maxOffsetX = 0;
+    let minWidth = 0;
+    let maxWidth = 0;
+
+    for (const playerEntity of players) {
+        const playerComp = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
+        const playerSize = this.world.getComponent<SizeComponent>(playerEntity, 'Size');
+        if (playerComp && playerSize) {
+            if (playerComp.offsetX < minOffsetX) {
+                minOffsetX = playerComp.offsetX;
+                minWidth = playerSize.width;
+            }
+            if (playerComp.offsetX > maxOffsetX) {
+                maxOffsetX = playerComp.offsetX;
+                maxWidth = playerSize.width;
+            }
+        }
+    }
+
+    const groupLeftBound = this.groupCenterX + minOffsetX - minWidth / 2;
+    const groupRightBound = this.groupCenterX + maxOffsetX + maxWidth / 2;
+    const potentialNewCenterX = this.groupCenterX + groupDx;
+
+    // Adjust groupDx if moving the center would push the group off-screen
+    if (potentialNewCenterX + minOffsetX - minWidth / 2 < 0) { // Check left edge
+        groupDx = -(minOffsetX - minWidth / 2); // Move exactly to the edge
+    } else if (potentialNewCenterX + maxOffsetX + maxWidth / 2 > this.canvasWidth) { // Check right edge
+        groupDx = this.canvasWidth - (this.groupCenterX + maxOffsetX + maxWidth / 2);
+    }
     
-    // Process each player entity (typically just one in most games)
-    for (const playerEntity of playerEntities) {
-      this.updatePlayerMovement(playerEntity, deltaTime);
-      
-      // Update bullet cooldown timer
-      const player = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
-      if (player && player.bulletCooldown > 0) {
-        player.bulletCooldown = Math.max(0, player.bulletCooldown - deltaTime);
+    this.groupCenterX += groupDx; // Update the group's logical center X
+
+    // --- Individual Player Position Update & Cooldown ---
+    for (const playerEntity of players) {
+      const playerComp = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
+      const playerPos = this.world.getComponent<PositionComponent>(playerEntity, 'Position');
+      const playerSize = this.world.getComponent<SizeComponent>(playerEntity, 'Size');
+
+      if (playerComp && playerPos && playerSize) {
+        // Calculate target X based on group center and individual offset
+        const targetX = this.groupCenterX + playerComp.offsetX;
+        // No need to clamp individual players now, as the group center is clamped
+        playerPos.x = targetX - playerSize.width / 2; // Adjust for center alignment
+
+        // --- Shooting Cooldown ---
+        if (!playerComp.canShoot) {
+          playerComp.currentShootCooldown += deltaTime;
+          if (playerComp.currentShootCooldown >= playerComp.shootCooldown) {
+            playerComp.canShoot = true;
+            playerComp.currentShootCooldown = 0;
+          }
+        }
       }
-      
-      // Update any active cooldown modifiers
+      // --- Cooldown Modifier Update (if applicable) ---
       this.updateCooldownModifiers(playerEntity, deltaTime);
+    }
+
+    // --- Trigger Shooting based on GameState ---
+    if (gameState.isShooting) {
+        this.triggerShootingForAllPlayers();
     }
   }
 
   /**
-   * Updates any active cooldown modifiers on the player
+   * Updates any active cooldown modifiers on a player entity
    */
   private updateCooldownModifiers(playerEntity: Entity, deltaTime: number): void {
+    // ... (Keep existing implementation) ...
     const cooldownModifier = this.world.getComponent<CooldownModifierComponent>(
       playerEntity,
       'CooldownModifier'
     );
-    
-    // If there's an active temporary cooldown modifier, update its timer
+
     if (cooldownModifier && cooldownModifier.timeRemaining > 0) {
       cooldownModifier.timeRemaining = Math.max(0, cooldownModifier.timeRemaining - deltaTime);
-      
-      // If the effect has expired, reset to default
+
       if (cooldownModifier.timeRemaining === 0) {
         this.world.removeComponent(playerEntity, 'CooldownModifier');
       }
@@ -72,86 +142,41 @@ export class PlayerSystem extends System {
   }
 
   /**
-   * Updates the player position based on input stored in the PlayerComponent
+   * Iterates through all player entities and calls shoot() for those who can.
    */
-  private updatePlayerMovement(playerEntity: Entity, deltaTime: number): void {
-    const player = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
-    const position = this.world.getComponent<PositionComponent>(playerEntity, 'Position');
-    const size = this.world.getComponent<SizeComponent>(playerEntity, 'Size');
-    
-    if (!player || !position || !size) return;
-    
-    // Handle left/right movement based on player input flags
-    if (player.isMovingLeft) {
-      position.x = Math.max(0, position.x - this.playerSpeed * deltaTime);
-    }
-    
-    if (player.isMovingRight) {
-      const maxX = this.canvasWidth - size.width;
-      position.x = Math.min(maxX, position.x + this.playerSpeed * deltaTime);
-    }
+  private triggerShootingForAllPlayers(): void {
+      const players = this.world.getEntitiesWith('Player');
+      for (const playerEntity of players) {
+          this.shoot(playerEntity);
+      }
   }
 
   /**
-   * Creates a bullet entity when the player shoots
-   * 
-   * This is a great example of entity creation with components in the ECS system
+   * Creates a bullet entity for a single player entity if it can shoot.
    */
   shoot(playerEntity: Entity): void {
-    const player = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
-    const position = this.world.getComponent<PositionComponent>(playerEntity, 'Position');
-    const size = this.world.getComponent<SizeComponent>(playerEntity, 'Size');
-    
-    if (!player || !position || !size) return; 
-    
-    // Check if we're still in cooldown period
-    if (player.bulletCooldown > 0) return;
-    
-    // Create bullet
-    this.createBullet(
-      position.x + size.width * 0.5, 
-      position.y, 
-      10, 
-      10
-    );
-    
-    // Get any active cooldown modifier
-    const cooldownModifier = this.world.getComponent<CooldownModifierComponent>(
-      playerEntity, 
-      'CooldownModifier'
-    );
-    
-    // Apply cooldown modifier if one exists, otherwise use default cooldown
-    if (cooldownModifier) {
-      player.bulletCooldown = player.bulletCooldownMax * cooldownModifier.bulletCooldownMultiplier;
-    } else {
-      player.bulletCooldown = player.bulletCooldownMax;
-    }
-  }
+    const playerPos = this.world.getComponent<PositionComponent>(playerEntity, 'Position');
+    const playerSize = this.world.getComponent<SizeComponent>(playerEntity, 'Size');
+    const playerComp = this.world.getComponent<PlayerComponent>(playerEntity, 'Player');
 
-  /**
-   * Helper method to create a bullet entity with all necessary components
-   */
-  private createBullet(x: number, y: number, width: number, height: number): void {
-    // Create a new entity for the bullet
+    // Check if player exists, has components, and can shoot
+    if (!playerPos || !playerSize || !playerComp || !playerComp.canShoot) return;
+
+    // Apply cooldown
+    playerComp.canShoot = false;
+    playerComp.currentShootCooldown = 0; // Reset timer
+
+    // --- Create bullet for this specific player ---
+    const bulletSize = 10;
+    const bulletX = playerPos.x + playerSize.width / 2 - bulletSize / 2;
+    const bulletY = playerPos.y;
+
     const bullet = this.world.createEntity();
-    
-    // Position component determines where the bullet appears
-    this.world.addComponent(bullet, new PositionComponent(x - width / 2, y));
-    
-    // Size component determines the bullet dimensions
-    this.world.addComponent(bullet, new SizeComponent(width, height));
-    
-    // Velocity component makes the bullet move upward
-    this.world.addComponent(bullet, new VelocityComponent(0, -500)); // Negative Y = upward
-    
-    // Render component gives the bullet its appearance
+    this.world.addComponent(bullet, new PositionComponent(bulletX, bulletY));
+    this.world.addComponent(bullet, new SizeComponent(bulletSize, bulletSize));
+    this.world.addComponent(bullet, new VelocityComponent(0, -400));
     this.world.addComponent(bullet, new RenderComponent('yellow'));
-    
-    // Bullet component marks it as a bullet and stores bullet-specific data
-    this.world.addComponent(bullet, new BulletComponent(1, false));
-    
-    // Collision component allows the bullet to collide with enemies
     this.world.addComponent(bullet, new CollisionComponent(true, 1, 'bullet'));
+    this.world.addComponent(bullet, new BulletComponent(1, false));
   }
 }

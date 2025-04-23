@@ -1,20 +1,20 @@
 import type { Component } from '../Component';
+import type { Entity } from "../Entity"; // Ensure Entity is imported if not already
 
 /**
  * PlayerComponent
- * Marks an entity as the player and stores player-specific data
+ * Marks an entity as a player-controlled unit.
  */
 export class PlayerComponent implements Component {
   readonly type = 'Player';
-  
+
   constructor(
-    public lives = 3,
-    public score = 0,
-    public isMovingLeft = false,
-    public isMovingRight = false,
-    public isShooting = false,      // Whether the player is holding the shoot button
-    public bulletCooldown = 0,       // Current cooldown time remaining
-    public bulletCooldownMax = 0.25  // Time between shots in seconds (4 shots per second)
+    // Removed lives, score, isMovingLeft, isMovingRight, isShooting - moved to GameState or handled differently
+    public offsetX = 0,             // Horizontal offset relative to the group center (0 for the main player)
+    public speed = 400,             // Player movement speed
+    public canShoot = true,         // Flag to check if player can shoot
+    public shootCooldown = 0.25,    // Time between shots in seconds
+    public currentShootCooldown = 0 // Timer for cooldown
   ) {}
 }
 
@@ -89,7 +89,12 @@ export class GameStateComponent implements Component {
   
   constructor(
     public isPaused = false,
-    public isGameOver = false
+    public isGameOver = false,
+    // --- Add input state flags ---
+    public isMovingLeft = false,
+    public isMovingRight = false,
+    public isShooting = false,
+    public score = 0 // Add global score tracking
   ) {}
 }
 
