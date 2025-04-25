@@ -1,5 +1,4 @@
 import type { Component } from '../Component';
-import type { Entity } from "../Entity"; // Ensure Entity is imported if not already
 
 /**
  * PlayerComponent
