@@ -9,12 +9,16 @@ export class PlayerComponent implements Component {
   readonly type = 'Player';
 
   constructor(
-    // Removed lives, score, isMovingLeft, isMovingRight, isShooting - moved to GameState or handled differently
-    public offsetX = 0,             // Horizontal offset relative to the group center (0 for the main player)
+    public offsetX = 0,             // Horizontal offset relative to initial position
     public speed = 400,             // Player movement speed
     public canShoot = true,         // Flag to check if player can shoot
     public shootCooldown = 0.25,    // Time between shots in seconds
-    public currentShootCooldown = 0 // Timer for cooldown
+    public currentShootCooldown = 0, // Timer for cooldown
+    // Add individual control flags for each player
+    public isMovingLeft = false,    // Is this player moving left
+    public isMovingRight = false,   // Is this player moving right
+    public isShooting = false,      // Is this player shooting
+    public playerIndex = 0          // Index to identify this player (0, 1, 2, etc.)
   ) {}
 }
 
@@ -90,11 +94,13 @@ export class GameStateComponent implements Component {
   constructor(
     public isPaused = false,
     public isGameOver = false,
-    // --- Add input state flags ---
-    public isMovingLeft = false,
-    public isMovingRight = false,
-    public isShooting = false,
-    public score = 0 // Add global score tracking
+    // Remove individual control flags from GameState since they'll be in each PlayerComponent
+    // public isMovingLeft = false,
+    // public isMovingRight = false,
+    // public isShooting = false,
+    public score = 0,              // Keep global score tracking
+    public activePlayerIndex = 0,  // Which player is currently being controlled (0-indexed)
+    public playerCount = 3         // Total number of players
   ) {}
 }
 
@@ -110,4 +116,34 @@ export class CooldownModifierComponent implements Component {
     public duration = -1,                  // Duration in seconds (-1 means permanent)
     public timeRemaining = -1              // Time remaining for temporary effect (-1 means permanent)
   ) {}
+}
+
+/**
+ * InputComponent to track the global input state of the game
+ * This centralizes all input state in one component, attached to a singleton entity
+ */
+export class InputComponent implements Component {
+  readonly type = 'Input';
+  
+  constructor(
+    public leftPressed = false,
+    public rightPressed = false,
+    public upPressed = false, 
+    public downPressed = false,
+    public spacePressed = false, // For shooting
+    public pPressed = false,    // For pausing
+    public rPressed = false,    // For restarting
+    public singleShotTriggered = false, // For one-time actions like manual shots
+    public justPaused = false,  // For toggle actions
+    public justRestarted = false // For one-time actions
+  ) {}
+  
+  /**
+   * Resets one-time triggers after they've been processed
+   */
+  resetTriggers(): void {
+    this.singleShotTriggered = false;
+    this.justPaused = false;
+    this.justRestarted = false;
+  }
 }

@@ -5,20 +5,21 @@ import type {
   RenderComponent,
   SpriteComponent,
   BackgroundComponent,
-  PathCommand
+  PathCommand,
 } from "../components/CoreComponents";
 import type { Entity } from "../Entity";
 import { BackgroundPerspectiveHelper } from "../utils/BackgroundPerspectiveHelper";
+import type { GameStateComponent, PlayerComponent } from "../components/GameComponents";
 
 /**
  * Configuration for perspective settings
  */
 export interface PerspectiveConfig {
   enabled: boolean;
-  vanishingPointY: number;  // Y position of the vanishing point
-  depthFactor: number;      // How strong the perspective effect is (0-1)
-  horizonY: number;         // Y position of the horizon line
-  minScale: number;         // Minimum scale for distant objects
+  vanishingPointY: number; // Y position of the vanishing point
+  depthFactor: number; // How strong the perspective effect is (0-1)
+  horizonY: number; // Y position of the horizon line
+  minScale: number; // Minimum scale for distant objects
 }
 
 /**
@@ -36,14 +37,14 @@ export class RenderSystem extends System {
     super(["Position", "Size"]);
     this.ctx = ctx;
     this.imageCache = new Map();
-    
+
     // Default perspective settings
     this.perspective = {
       enabled: true,
-      vanishingPointY: -999,           // Top of screen by default
-      depthFactor: 0.5,             // Moderate perspective effect
+      vanishingPointY: -999, // Top of screen by default
+      depthFactor: 0.5, // Moderate perspective effect
       horizonY: ctx.canvas.height * -0.5, // Middle of screen
-      minScale: 0.01                 // Objects will scale down to 50% at most
+      minScale: 0.01, // Objects will scale down to 50% at most
     };
   }
 
@@ -57,11 +58,14 @@ export class RenderSystem extends System {
   /**
    * Apply perspective transformation to position and size based on Y position
    */
-  private applyPerspective(position: PositionComponent, size: SizeComponent): { 
-    x: number, 
-    y: number, 
-    width: number, 
-    height: number 
+  private applyPerspective(
+    position: PositionComponent,
+    size: SizeComponent
+  ): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
   } {
     // If perspective is disabled, return original values
     if (!this.perspective.enabled) {
@@ -69,7 +73,7 @@ export class RenderSystem extends System {
         x: position.x,
         y: position.y,
         width: size.width,
-        height: size.height
+        height: size.height,
       };
     }
 
@@ -78,67 +82,54 @@ export class RenderSystem extends System {
     const distanceFromHorizon = Math.max(0, position.y - this.perspective.horizonY);
     const maxDistance = this.ctx.canvas.height - this.perspective.horizonY;
     const depthRatio = maxDistance > 0 ? distanceFromHorizon / maxDistance : 0;
-    
+
     // Calculate scale based on depth (closer to horizon = smaller)
     // Objects at the horizon will be at minScale, objects at the bottom will be at 1.0
-    const scale = this.perspective.minScale + 
-      (1 - this.perspective.minScale) * depthRatio;
-    
+    const scale = this.perspective.minScale + (1 - this.perspective.minScale) * depthRatio;
+
     // Calculate the width and height with perspective scaling
     const perspectiveWidth = size.width * scale;
     const perspectiveHeight = size.height * scale;
-    
+
     // Calculate horizontal position shift towards vanishing point
     // The further an object is from the horizon, the less it's affected
     const canvasMidX = this.ctx.canvas.width / 2;
-    const distanceFromCenter = position.x + (size.width / 2) - canvasMidX;
+    const distanceFromCenter = position.x + size.width / 2 - canvasMidX;
     const horizontalShift = distanceFromCenter * (1 - scale) * this.perspective.depthFactor;
-    
+
     // Return the transformed position and size
     return {
       x: position.x - (size.width - perspectiveWidth) / 2 - horizontalShift,
       y: position.y,
       width: perspectiveWidth,
-      height: perspectiveHeight
+      height: perspectiveHeight,
     };
   }
 
   update(deltaTime: number): void {
-    // First process all background entities to ensure they have Position and Size components
-    const backgroundEntities = this.world.getEntitiesWith("Background");
-    for (const entity of backgroundEntities) {
-      const background = this.world.getComponent<BackgroundComponent>(entity, "Background");
-      if (background) {
-        // Ensure all background entities have Position and Size components for perspective
-        BackgroundPerspectiveHelper.ensurePositionAndSizeForBackground(this.world, entity, background);
-      }
-    }
+    // Clear canvas
+    // this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
-    // Sort by z-index to control layering
-    backgroundEntities.sort((a, b) => {
-      const bgA = this.world.getComponent<BackgroundComponent>(a, "Background");
-      const bgB = this.world.getComponent<BackgroundComponent>(b, "Background");
-      return (bgA?.zIndex || 0) - (bgB?.zIndex || 0);
-    });
-    
-    // Render all background elements
-    for (const entity of backgroundEntities) {
-      this.renderBackground(entity);
-    }
+    // Get all entities that should be rendered
+    const entities = this.world.getEntitiesWith("Position", "Size");
 
-    // Get all renderable entities (either basic shapes or sprites)
-    const basicShapeEntities = this.world.getEntitiesWith("Position", "Size", "Render");
-    const spriteEntities = this.world.getEntitiesWith("Position", "Size", "Sprite");
+    // First render entities without render component (backgrounds, etc)
+    entities
+      .filter((entity) => this.world.getComponent(entity, "Background"))
+      .forEach((entity) => this.renderBackground(entity));
 
-    // Then render all basic shapes
-    for (const entity of basicShapeEntities) {
-      this.renderBasicShape(entity);
-    }
+    // Then render entities with render component
+    entities
+      .filter((entity) => this.world.getComponent(entity, "Render"))
+      .forEach((entity) => this.renderBasicShape(entity));
 
-    // Finally render all sprites (typically sprites should appear on top of basic shapes)
-    for (const entity of spriteEntities) {
-      this.renderSprite(entity, deltaTime);
-    }
+    // Render sprite entities on top
+    entities
+      .filter((entity) => this.world.getComponent(entity, "Sprite"))
+      .forEach((entity) => this.renderSprite(entity, deltaTime));
+
+    // Remove player selection indicator since all players are controlled simultaneously
+    // this.renderPlayerSelection();
   }
 
   /**
@@ -146,21 +137,21 @@ export class RenderSystem extends System {
    */
   private renderBackground(entity: Entity): void {
     const background = this.world.getComponent<BackgroundComponent>(entity, "Background");
-    
+
     if (!background) return;
-    
+
     this.ctx.fillStyle = background.color;
-    
+
     const position = this.world.getComponent<PositionComponent>(entity, "Position");
     const size = this.world.getComponent<SizeComponent>(entity, "Size");
-    
+
     // We handle the rendering differently based on the shape type
     switch (background.shape) {
-      case 'rectangle':
+      case "rectangle":
         if (position && size && this.perspective.enabled) {
           // Apply perspective transformation
           const { x, y, width, height } = this.applyPerspective(position, size);
-          
+
           // Draw with perspective applied
           this.ctx.fillRect(x, y, width, height);
         } else {
@@ -168,13 +159,13 @@ export class RenderSystem extends System {
           this.ctx.fillRect(background.x, background.y, background.width, background.height);
         }
         break;
-        
-      case 'polygon':
-      case 'custom':
+
+      case "polygon":
+      case "custom":
         if (background.pathCommands && background.pathCommands.length > 0) {
           // Create a new path
           const path = new Path2D();
-          
+
           if (this.perspective.enabled) {
             // Transform path commands with perspective
             const transformedCommands = BackgroundPerspectiveHelper.transformPathCommands(
@@ -182,83 +173,69 @@ export class RenderSystem extends System {
               this.ctx.canvas.width,
               this.perspective
             );
-            
+
             // Execute the transformed path commands
             this.executePathCommands(path, transformedCommands);
           } else {
             // Execute the original path commands
             this.executePathCommands(path, background.pathCommands);
           }
-          
+
           // Fill the path
           this.ctx.fill(path, background.fillRule);
         }
         break;
     }
   }
-  
+
   /**
    * Execute a series of path commands on a Path2D object
    */
   private executePathCommands(path: Path2D, commands: PathCommand[]): void {
     for (const cmd of commands) {
       switch (cmd.type) {
-        case 'moveTo':
+        case "moveTo":
           path.moveTo(cmd.x, cmd.y);
           break;
-          
-        case 'lineTo':
+
+        case "lineTo":
           path.lineTo(cmd.x, cmd.y);
           break;
-          
-        case 'arc':
-          path.arc(
-            cmd.x, 
-            cmd.y, 
-            cmd.radius, 
-            cmd.startAngle, 
-            cmd.endAngle, 
-            cmd.counterclockwise
-          );
+
+        case "arc":
+          path.arc(cmd.x, cmd.y, cmd.radius, cmd.startAngle, cmd.endAngle, cmd.counterclockwise);
           break;
-          
-        case 'arcTo':
+
+        case "arcTo":
           path.arcTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.radius);
           break;
-          
-        case 'bezierCurveTo':
-          path.bezierCurveTo(
-            cmd.cp1x, 
-            cmd.cp1y, 
-            cmd.cp2x, 
-            cmd.cp2y, 
-            cmd.x, 
-            cmd.y
-          );
+
+        case "bezierCurveTo":
+          path.bezierCurveTo(cmd.cp1x, cmd.cp1y, cmd.cp2x, cmd.cp2y, cmd.x, cmd.y);
           break;
-          
-        case 'quadraticCurveTo':
+
+        case "quadraticCurveTo":
           path.quadraticCurveTo(cmd.cpx, cmd.cpy, cmd.x, cmd.y);
           break;
-          
-        case 'ellipse':
+
+        case "ellipse":
           path.ellipse(
-            cmd.x, 
-            cmd.y, 
-            cmd.radiusX, 
-            cmd.radiusY, 
-            cmd.rotation, 
-            cmd.startAngle, 
-            cmd.endAngle, 
+            cmd.x,
+            cmd.y,
+            cmd.radiusX,
+            cmd.radiusY,
+            cmd.rotation,
+            cmd.startAngle,
+            cmd.endAngle,
             cmd.counterclockwise
           );
           break;
-          
-        case 'rect':
+
+        case "rect":
           path.rect(cmd.x, cmd.y, cmd.width, cmd.height);
           break;
-          
-        case 'closePath':
+
+        case "closePath":
           path.closePath();
           break;
       }
@@ -279,16 +256,16 @@ export class RenderSystem extends System {
     const { x, y, width, height } = this.applyPerspective(position, size);
 
     this.ctx.fillStyle = render.color;
-    
-    if (render.shape === 'rectangle') {
+
+    if (render.shape === "rectangle") {
       this.ctx.fillRect(x, y, width, height);
-    } else if (render.shape === 'circle') {
+    } else if (render.shape === "circle") {
       // For circles, draw an ellipse with the perspective applied
       const radiusX = width / 2;
       const radiusY = height / 2;
       const centerX = x + radiusX;
       const centerY = y + radiusY;
-      
+
       this.ctx.beginPath();
       this.ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
       this.ctx.fill();
@@ -299,82 +276,101 @@ export class RenderSystem extends System {
    * Renders an entity with Position, Size, and Sprite components
    */
   private renderSprite(entity: Entity, deltaTime: number): void {
-    const position = this.world.getComponent<PositionComponent>(entity, 'Position');
-    const size = this.world.getComponent<SizeComponent>(entity, 'Size');
-    const sprite = this.world.getComponent<SpriteComponent>(entity, 'Sprite');
-    
+    const position = this.world.getComponent<PositionComponent>(entity, "Position");
+    const size = this.world.getComponent<SizeComponent>(entity, "Size");
+    const sprite = this.world.getComponent<SpriteComponent>(entity, "Sprite");
+
     if (!position || !size || !sprite) return;
-    
+
     // Skip rendering if the image is not loaded or has an error
-    if (!sprite.imageElement || !sprite.imageElement.complete || sprite.imageElement.naturalWidth === 0) {
+    if (
+      !sprite.imageElement ||
+      !sprite.imageElement.complete ||
+      sprite.imageElement.naturalWidth === 0
+    ) {
       return;
     }
-    
+
     // Update animation frame if needed
     if (sprite.animationSpeed > 0 && sprite.totalFrames > 1) {
       // Calculate how many frames to advance based on animationSpeed and deltaTime
       const frameAdvance = sprite.animationSpeed * deltaTime;
-      
+
       // Update current frame, handling looping vs non-looping animations
       if (sprite.loop) {
         // For looping animations, wrap around to the beginning when reaching the end
         sprite.currentFrame = (sprite.currentFrame + frameAdvance) % sprite.totalFrames;
       } else {
         // For non-looping animations, stop at the last frame
-        sprite.currentFrame = Math.min(sprite.currentFrame + frameAdvance, sprite.totalFrames - 0.001);
+        sprite.currentFrame = Math.min(
+          sprite.currentFrame + frameAdvance,
+          sprite.totalFrames - 0.001
+        );
       }
     }
-    
+
     // Apply perspective transformation
     const { x, y, width, height } = this.applyPerspective(position, size);
-    
+
     // Save the current context state
     this.ctx.save();
-    
+
     // Apply opacity
     if (sprite.opacity !== 1) {
       this.ctx.globalAlpha = Math.max(0, Math.min(1, sprite.opacity));
     }
-    
+
     // Handle rotation by translating to the center of the entity, rotating, then drawing
     if (position.rotation !== 0) {
       const centerX = x + width / 2;
       const centerY = y + height / 2;
-      
+
       // Move to center, rotate, move back
       this.ctx.translate(centerX, centerY);
       this.ctx.rotate(position.rotation);
       this.ctx.translate(-centerX, -centerY);
     }
-    
+
     // Calculate source rectangle (for sprite sheet frames)
     const frameWidth = sprite.frameWidth || sprite.imageElement.width;
     const frameHeight = sprite.frameHeight || sprite.imageElement.height;
     const currentFrame = Math.floor(sprite.currentFrame); // Get integer frame number
-    
+
     // Calculate frame position in the sprite sheet using columns for 2D positioning
     const columns = sprite.columns || sprite.totalFrames; // Fallback for backward compatibility
     const sourceX = (currentFrame % columns) * frameWidth;
     const sourceY = Math.floor(currentFrame / columns) * frameHeight;
-    
+
     // Handle horizontal flipping
     if (sprite.flipped) {
       this.ctx.translate(x + width, y);
       this.ctx.scale(-1, 1);
       this.ctx.drawImage(
         sprite.imageElement,
-        sourceX, sourceY, frameWidth, frameHeight,
-        0, 0, width, height
+        sourceX,
+        sourceY,
+        frameWidth,
+        frameHeight,
+        0,
+        0,
+        width,
+        height
       );
     } else {
       // Normal drawing (no flip)
       this.ctx.drawImage(
         sprite.imageElement,
-        sourceX, sourceY, frameWidth, frameHeight,
-        x, y, width, height
+        sourceX,
+        sourceY,
+        frameWidth,
+        frameHeight,
+        x,
+        y,
+        width,
+        height
       );
     }
-    
+
     // Restore the context to its original state
     this.ctx.restore();
   }
